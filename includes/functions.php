@@ -46,6 +46,21 @@ function get_current_semester(): ?array
     return DB::fetch('SELECT * FROM semesters WHERE is_current = 1 LIMIT 1');
 }
 
+function get_setting(string $key, ?string $default = null): ?string
+{
+    $row = DB::fetch('SELECT setting_value FROM app_settings WHERE setting_key = ?', [$key]);
+    return $row['setting_value'] ?? $default;
+}
+
+function set_setting(string $key, string $value): void
+{
+    DB::exec(
+        'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+        [$key, $value]
+    );
+}
+
 function get_teacher_by_user(int $userId): ?array
 {
     return DB::fetch('SELECT * FROM teachers WHERE user_id = ? AND is_active = 1', [$userId]);

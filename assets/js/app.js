@@ -27,6 +27,88 @@ function showModal(html) {
 }
 function closeModal() { $('modal-container').innerHTML = ''; }
 
+/* ── Confirm / Prompt modals (Promise-based) ──────── */
+function _escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+function confirmModal(opts = {}) {
+  const {
+    title = 'ยืนยันการทำรายการ', message = '', icon = '',
+    confirmText = 'ยืนยัน', cancelText = 'ยกเลิก', danger = false,
+  } = opts;
+  return new Promise(resolve => {
+    const host = document.createElement('div');
+    host.className = 'modal-overlay';
+    host.style.zIndex = '300';
+    const autoIcon = icon || (danger ? '⚠️' : '❓');
+    host.innerHTML = `
+      <div class="modal" style="max-width:420px">
+        <div class="modal-body" style="text-align:center;padding:26px 24px 20px">
+          <div style="width:56px;height:56px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:26px;background:${danger?'#EF444418':'#7B1F3215'}">${autoIcon}</div>
+          <div class="fw-700" style="font-size:16px;margin-bottom:6px">${_escapeHtml(title)}</div>
+          <div class="fs-13 text-muted" style="line-height:1.6;white-space:pre-line">${_escapeHtml(message)}</div>
+        </div>
+        <div class="modal-footer" style="justify-content:center">
+          <button class="btn btn-ghost" data-act="cancel">${_escapeHtml(cancelText)}</button>
+          <button class="btn ${danger?'btn-danger':'btn-primary'}" data-act="ok">${_escapeHtml(confirmText)}</button>
+        </div>
+      </div>`;
+    const done = (val) => { document.removeEventListener('keydown', onKey); host.remove(); resolve(val); };
+    const onKey = (e) => { if (e.key === 'Escape') done(false); if (e.key === 'Enter') done(true); };
+    host.addEventListener('click', e => {
+      if (e.target === host) return done(false);
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'ok') done(true);
+      if (act === 'cancel') done(false);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(host);
+    host.querySelector('[data-act="ok"]').focus();
+  });
+}
+
+function promptModal(opts = {}) {
+  const {
+    title = 'กรอกข้อมูล', label = '', message = '', placeholder = '',
+    value = '', confirmText = 'ตกลง', cancelText = 'ยกเลิก', type = 'text',
+  } = opts;
+  return new Promise(resolve => {
+    const host = document.createElement('div');
+    host.className = 'modal-overlay';
+    host.style.zIndex = '300';
+    host.innerHTML = `
+      <div class="modal" style="max-width:440px">
+        <div class="modal-header">${_escapeHtml(title)}<span class="modal-close" data-act="cancel">×</span></div>
+        <div class="modal-body">
+          ${message ? `<div class="fs-13 text-muted mb-14" style="line-height:1.6">${_escapeHtml(message)}</div>` : ''}
+          <div class="form-group">
+            ${label ? `<label class="form-label">${_escapeHtml(label)}</label>` : ''}
+            <input class="form-control" id="_pm-input" type="${type}" placeholder="${_escapeHtml(placeholder)}" value="${_escapeHtml(value)}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" data-act="cancel">${_escapeHtml(cancelText)}</button>
+          <button class="btn btn-primary" data-act="ok">${_escapeHtml(confirmText)}</button>
+        </div>
+      </div>`;
+    const input = host.querySelector('#_pm-input');
+    const done = (val) => { document.removeEventListener('keydown', onKey); host.remove(); resolve(val); };
+    const submit = () => { const v = input.value.trim(); done(v === '' ? null : v); };
+    const onKey = (e) => { if (e.key === 'Escape') done(null); if (e.key === 'Enter') submit(); };
+    host.addEventListener('click', e => {
+      if (e.target === host) return done(null);
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'ok') submit();
+      if (act === 'cancel') done(null);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(host);
+    input.focus(); input.select();
+  });
+}
+
 function fmt(n) { return '฿' + Number(n).toLocaleString('th-TH', { minimumFractionDigits: 0 }); }
 function fmtN(n) { return Number(n).toLocaleString('th-TH'); }
 function thaiDate(d) {
@@ -61,6 +143,7 @@ const NAV = [
   { section: 'ระบบ' },
   { id: 'institution', icon: '🏫', label: 'ข้อมูลสถานศึกษา',  roles: ['admin','director'] },
   { id: 'users',       icon: '👥', label: 'จัดการผู้ใช้งาน',   roles: ['admin','director'] },
+  { id: 'settings',   icon: '🔧', label: 'การตั้งค่าระบบ',     roles: ['admin'] },
 ];
 
 let currentPage = '';
@@ -86,7 +169,7 @@ function buildNav() {
 const pageTitles = {
   dashboard: 'ภาพรวมระบบ', claims: 'จัดการใบเบิก', rules: 'กำหนดเงื่อนไข',
   periods: 'งวดการเบิก', attendance: 'บันทึกปฏิบัติงาน', makeup: 'สอนชดเชย/แทน',
-  reports: 'รายงานสรุป', institution: 'ข้อมูลสถานศึกษา', users: 'จัดการผู้ใช้งาน',
+  reports: 'รายงานสรุป', institution: 'ข้อมูลสถานศึกษา', users: 'จัดการผู้ใช้งาน', settings: 'การตั้งค่าระบบ',
 };
 
 function navigate(page) {
@@ -357,20 +440,20 @@ pages.claims = async () => {
   render();
 
   window.approveClaim = async (id) => {
-    if (!confirm('อนุมัติใบเบิกนี้?')) return;
+    if (!await confirmModal({ title:'อนุมัติใบเบิก', message:'ยืนยันการอนุมัติใบเบิกนี้?', confirmText:'อนุมัติ', icon:'✅' })) return;
     const r = await post('/api/claims.php', { action: 'approve', id });
     toast(r.message, r.success ? 'success' : 'error');
     if (r.success) pages.claims();
   };
   window.rejectClaim = async (id) => {
-    const note = prompt('เหตุผลที่ปฏิเสธ:');
+    const note = await promptModal({ title:'ปฏิเสธใบเบิก', label:'เหตุผลที่ปฏิเสธ', placeholder:'ระบุเหตุผล...', confirmText:'ปฏิเสธ' });
     if (note === null) return;
     const r = await post('/api/claims.php', { action: 'reject', id, note });
     toast(r.message, r.success ? 'success' : 'error');
     if (r.success) pages.claims();
   };
   window.deleteClaim = async (id) => {
-    if (!confirm('ลบใบเบิกนี้?')) return;
+    if (!await confirmModal({ title:'ลบใบเบิก', message:'ยืนยันการลบใบเบิกนี้?', confirmText:'ลบ', danger:true })) return;
     const r = await post('/api/claims.php', { action: 'delete', id });
     toast(r.message, r.success ? 'success' : 'error');
     if (r.success) pages.claims();
@@ -837,7 +920,7 @@ pages.periods = async () => {
     if (r.success) pages.periods();
   };
   window.markPaid = async (id) => {
-    if (!confirm('บันทึกการจ่ายเงินงวดนี้?')) return;
+    if (!await confirmModal({ title:'บันทึกการจ่ายเงิน', message:'ยืนยันการบันทึกการจ่ายเงินงวดนี้?', confirmText:'บันทึกการจ่าย', icon:'💰' })) return;
     const r = await post('/api/periods.php', { action:'mark_paid', id });
     toast(r.message, r.success?'success':'error');
     if (r.success) pages.periods();
@@ -874,12 +957,19 @@ pages.periods = async () => {
 
 /* ── MAKEUP ───────────────────────────────────────── */
 pages.makeup = async () => {
-  const [mkR, teachersR] = await Promise.all([
+  const [mkR, teachersR, reasonsR] = await Promise.all([
     api('/api/makeup.php?type=makeup'),
     api('/api/teachers.php'),
+    api('/api/settings.php?section=makeup_reasons'),
   ]);
   const makeup   = mkR.data?.records    || [];
   const teachers = teachersR.data?.teachers || [];
+  const allReasons = reasonsR.data?.reasons || [
+    { code:'holiday',  label:'วันหยุดราชการ',            icon:'🎌', color:'#3B82F6', bg_color:'#3B82F620', is_active:1 },
+    { code:'personal', label:'ลากิจ',                    icon:'📋', color:'#F59E0B', bg_color:'#F59E0B20', is_active:1 },
+    { code:'official', label:'ปฏิบัติราชการนอกสถานที่', icon:'✈️', color:'#8B5CF6', bg_color:'#8B5CF620', is_active:1 },
+    { code:'sick',     label:'ลาป่วย',                   icon:'🏥', color:'#EF4444', bg_color:'#EF444420', is_active:1 },
+  ];
   let activeTab  = 'makeup';
   let subRecords = [];
 
@@ -889,9 +979,14 @@ pages.makeup = async () => {
   };
   await loadSub();
 
-  const reasonLabel = { holiday:'🎌 วันหยุดราชการ', personal:'📋 ลากิจ', official:'✈️ ปฏิบัติราชการ', sick:'🏥 ลาป่วย' };
-  const reasonBg    = { holiday:'#3B82F620', personal:'#F59E0B20', official:'#8B5CF620', sick:'#EF444420' };
-  const reasonColor = { holiday:'#3B82F6', personal:'#F59E0B', official:'#8B5CF6', sick:'#EF4444' };
+  const reasonLabel = {};
+  const reasonBg    = {};
+  const reasonColor = {};
+  allReasons.forEach(r => {
+    reasonLabel[r.code] = r.icon + ' ' + r.label;
+    reasonBg[r.code]    = r.bg_color;
+    reasonColor[r.code] = r.color;
+  });
 
   const render = () => {
     const isMakeup = activeTab === 'makeup';
@@ -903,9 +998,7 @@ pages.makeup = async () => {
         ${isMakeup ? `
           <div class="d-flex justify-between mb-14 align-center" style="flex-wrap:wrap;gap:10px">
             <div class="d-flex gap-8" style="flex-wrap:wrap">
-              <span class="badge" style="background:#3B82F620;color:#3B82F6">🎌 วันหยุดราชการ</span>
-              <span class="badge" style="background:#F59E0B20;color:#F59E0B">📋 ลากิจ</span>
-              <span class="badge" style="background:#8B5CF620;color:#8B5CF6">✈️ ปฏิบัติราชการนอกสถานที่</span>
+              ${allReasons.filter(r=>r.is_active).map(r=>`<span class="badge" style="background:${r.bg_color};color:${r.color}">${r.icon} ${r.label}</span>`).join('')}
             </div>
             ${can('admin','curriculum','teacher')?`<button class="btn btn-primary" onclick="openAddMakeup()">+ เพิ่มรายการสอนชดเชย</button>`:''}
           </div>
@@ -973,7 +1066,7 @@ pages.makeup = async () => {
     if (r.success) pages.makeup();
   };
   window.deleteMk = async (id) => {
-    if (!confirm('ลบรายการนี้?')) return;
+    if (!await confirmModal({ title:'ลบรายการสอนชดเชย', message:'ยืนยันการลบรายการนี้?', confirmText:'ลบ', danger:true })) return;
     const r = await post('/api/makeup.php', { action:'delete_makeup', id });
     toast(r.message, r.success?'success':'error');
     if (r.success) pages.makeup();
@@ -984,7 +1077,7 @@ pages.makeup = async () => {
     if (r.success) pages.makeup();
   };
   window.deleteSb = async (id) => {
-    if (!confirm('ลบรายการนี้?')) return;
+    if (!await confirmModal({ title:'ลบรายการสอนแทน', message:'ยืนยันการลบรายการนี้?', confirmText:'ลบ', danger:true })) return;
     const r = await post('/api/makeup.php', { action:'delete_substitute', id });
     toast(r.message, r.success?'success':'error');
     if (r.success) pages.makeup();
@@ -1002,9 +1095,7 @@ pages.makeup = async () => {
         </div>
         <div class="form-group"><label class="form-label">เหตุผล</label>
           <select class="form-control" id="mk-reason">
-            <option value="holiday">🎌 วันหยุดราชการ</option>
-            <option value="personal">📋 ลากิจ</option>
-            <option value="official">✈️ ปฏิบัติราชการนอกสถานที่</option>
+            ${allReasons.filter(r=>r.is_active).map(r=>`<option value="${r.code}">${r.icon} ${r.label}</option>`).join('')}
           </select></div>
         <div class="grid-2">
           <div class="form-group"><label class="form-label">วันที่ขาด</label><input class="form-control" type="date" id="mk-missed"></div>
@@ -1083,7 +1174,7 @@ pages.reports = async () => {
           ${semesters.map(s=>`<option value="${s.id}" ${s.is_current?'selected':''}>${s.name}</option>`).join('')}
         </select>
         <div class="flex-1"></div>
-        <button class="btn btn-primary" onclick="alert('กำลังพัฒนา Export Excel')">📊 Export Excel</button>
+        <button class="btn btn-primary" onclick="toast('อยู่ระหว่างการพัฒนา Export Excel','info')">📊 Export Excel</button>
       </div>
 
       <div class="grid-4 mb-20">
@@ -1182,12 +1273,34 @@ pages.users = async () => {
   const roleLabels = { admin:'ผู้ดูแลระบบ', director:'ผู้อำนวยการ', curriculum:'งานหลักสูตร', teacher:'ครูผู้สอน', accounting:'งานบัญชี' };
   const roleColors = { admin:'#EF4444', director:'#7B1F32', curriculum:'#3B82F6', teacher:'#22C55E', accounting:'#F59E0B' };
 
+  let uSearch = '', uRole = '', uStatus = '', uPage = 1;
+  const perPage = 10;
+
   $('page-content').innerHTML = `
     <div class="anim-fadeup">
-      <div class="d-flex justify-between mb-18">
+      <div class="d-flex justify-between mb-18 align-center" style="flex-wrap:wrap;gap:10px">
         <div class="text-muted fs-13">จัดการบัญชีผู้ใช้งานทุก Role ในระบบ</div>
-        <button class="btn btn-primary" onclick="openAddUser()">+ เพิ่มผู้ใช้</button>
+        <div class="d-flex gap-8" style="flex-wrap:wrap">
+          ${can('admin') ? `<button class="btn btn-outline" onclick="openRmsSync()">🔌 โอนข้อมูลจาก RMS</button>` : ''}
+          <button class="btn btn-primary" onclick="openAddUser()">+ เพิ่มผู้ใช้</button>
+        </div>
       </div>
+
+      <div class="d-flex gap-10 mb-14 align-center" style="flex-wrap:wrap">
+        <input class="form-control" id="u-search" placeholder="🔍 ค้นหา ชื่อ / ชื่อผู้ใช้ / อีเมล" style="width:280px" oninput="usersOnSearch(this.value)">
+        <select class="form-control" style="width:170px" onchange="usersOnRole(this.value)">
+          <option value="">ทุกบทบาท</option>
+          ${Object.entries(roleLabels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
+        </select>
+        <select class="form-control" style="width:150px" onchange="usersOnStatus(this.value)">
+          <option value="">ทุกสถานะ</option>
+          <option value="1">ใช้งาน</option>
+          <option value="0">ไม่ใช้งาน</option>
+        </select>
+        <div class="flex-1"></div>
+        <div class="fs-12 text-muted" id="u-count"></div>
+      </div>
+
       <div class="card">
         <div class="tbl-wrap">
           <table>
@@ -1196,42 +1309,132 @@ pages.users = async () => {
               <th>แผนก</th><th class="text-center">ล็อกอินล่าสุด</th>
               <th class="text-center">สถานะ</th><th class="text-center">จัดการ</th>
             </tr></thead>
-            <tbody>
-              ${users.map(u=>`<tr>
-                <td><div class="d-flex align-center gap-10">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${roleColors[u.role]}22;color:${roleColors[u.role]};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${u.full_name.slice(0,1)}</div>
-                  <span class="fw-600 fs-13">${u.full_name}</span>
-                </div></td>
-                <td class="text-muted fs-12">${u.email||'-'}</td>
-                <td class="text-center"><span class="badge" style="background:${roleColors[u.role]}20;color:${roleColors[u.role]}">${roleLabels[u.role]||u.role}</span></td>
-                <td class="fs-12">${u.dept_name||'-'}</td>
-                <td class="text-center text-muted fs-12">${u.last_login?thaiDate(u.last_login.split(' ')[0]):'-'}</td>
-                <td class="text-center">
-                  <div class="toggle ${u.is_active?'on':'off'}" onclick="toggleUser(${u.id},${u.is_active})"><div class="toggle-knob"></div></div>
-                </td>
-                <td class="text-center"><div class="d-flex gap-8" style="justify-content:center">
-                  <button class="btn btn-ghost btn-sm" onclick="openEditUser(${u.id})">แก้ไข</button>
-                  <button class="btn btn-ghost btn-sm" onclick="resetPwd(${u.id})">รีเซ็ต</button>
-                </div></td>
-              </tr>`).join('')}
-            </tbody>
+            <tbody id="users-tbody"></tbody>
           </table>
         </div>
+        <div id="u-pager" class="d-flex align-center justify-between" style="padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;gap:10px"></div>
       </div>
     </div>`;
 
+  const renderUsers = () => {
+    const q = uSearch.trim().toLowerCase();
+    let list = users.filter(u => {
+      if (uRole && u.role !== uRole) return false;
+      if (uStatus !== '' && String(u.is_active) !== uStatus) return false;
+      if (q) {
+        const hay = `${u.full_name} ${u.username||''} ${u.email||''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(list.length / perPage));
+    if (uPage > totalPages) uPage = totalPages;
+    const start = (uPage - 1) * perPage;
+    const pageRows = list.slice(start, start + perPage);
+
+    $('u-count').textContent = `พบ ${fmtN(list.length)} รายชื่อ`;
+    $('users-tbody').innerHTML = pageRows.map(u=>`<tr>
+        <td><div class="d-flex align-center gap-10">
+          <div style="width:32px;height:32px;border-radius:50%;background:${roleColors[u.role]}22;color:${roleColors[u.role]};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${u.full_name.slice(0,1)}</div>
+          <div><div class="fw-600 fs-13">${u.full_name}</div><div class="fs-11 text-muted">${u.username||''}</div></div>
+        </div></td>
+        <td class="text-muted fs-12">${u.email||'-'}</td>
+        <td class="text-center"><span class="badge" style="background:${roleColors[u.role]}20;color:${roleColors[u.role]}">${roleLabels[u.role]||u.role}</span></td>
+        <td class="fs-12">${u.dept_name||'-'}</td>
+        <td class="text-center text-muted fs-12">${u.last_login?thaiDate(u.last_login.split(' ')[0]):'-'}</td>
+        <td class="text-center">
+          <div class="toggle ${u.is_active?'on':'off'}" onclick="toggleUser(${u.id},${u.is_active})"><div class="toggle-knob"></div></div>
+        </td>
+        <td class="text-center"><div class="d-flex gap-8" style="justify-content:center">
+          <button class="btn btn-ghost btn-sm" onclick="openEditUser(${u.id})">แก้ไข</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetPwd(${u.id})">รีเซ็ต</button>
+          ${can('admin') ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">ลบ</button>` : ''}
+        </div></td>
+      </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">ไม่พบผู้ใช้ที่ตรงกับเงื่อนไข</td></tr>`;
+
+    const from = list.length ? start + 1 : 0;
+    const to   = Math.min(start + perPage, list.length);
+    $('u-pager').innerHTML = `
+      <div class="fs-12 text-muted">แสดง ${from}–${to} จาก ${fmtN(list.length)} · หน้า ${uPage}/${totalPages}</div>
+      <div class="d-flex gap-6">
+        <button class="btn btn-ghost btn-sm" ${uPage<=1?'disabled':''} onclick="usersGoPage(${uPage-1})">← ก่อนหน้า</button>
+        <button class="btn btn-ghost btn-sm" ${uPage>=totalPages?'disabled':''} onclick="usersGoPage(${uPage+1})">ถัดไป →</button>
+      </div>`;
+  };
+
+  window.usersOnSearch = (v) => { uSearch = v; uPage = 1; renderUsers(); };
+  window.usersOnRole   = (v) => { uRole = v; uPage = 1; renderUsers(); };
+  window.usersOnStatus = (v) => { uStatus = v; uPage = 1; renderUsers(); };
+  window.usersGoPage   = (p) => { uPage = p; renderUsers(); };
+  renderUsers();
+
   window._usersData = users;
   window._deptsData = departments;
+
+  window.openRmsSync = async () => {
+    const cfg = await api('/api/settings.php?section=integration');
+    const url = cfg.data?.rms_base_url || '';
+    showModal(`<div class="modal-overlay"><div class="modal" style="max-width:480px">
+      <div class="modal-header">โอนข้อมูลบุคลากรจาก RMS<span class="modal-close" onclick="closeModal()">×</span></div>
+      <div class="modal-body">
+        <div class="fs-13 text-muted mb-14" style="line-height:1.7">
+          ดึงข้อมูลจาก <code>${url || '(ยังไม่ได้ตั้งค่า URL)'}</code>
+          <ul style="margin:8px 0 0 18px;padding:0">
+            <li>โอนเฉพาะบุคลากรที่ยังไม่พ้นสภาพ (<code>people_exit = 0</code>)</li>
+            <li><code>people_id</code> เป็นชื่อผู้ใช้ · รหัสผ่านจาก <code>ath_pass</code></li>
+            <li>บุคลากรที่พ้นสภาพ/ไม่พบในต้นทางจะถูกตั้งเป็น "ไม่ใช้งาน"</li>
+          </ul>
+          <div class="mt-8">แก้ไข URL ต้นทางได้ที่เมนู <b>การตั้งค่าระบบ → การเชื่อมต่อ RMS</b></div>
+        </div>
+        <div id="rms-modal-result"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">ปิด</button>
+        <button class="btn btn-primary" id="rms-modal-btn" onclick="runRmsSync()">⬇️ เริ่มโอนข้อมูล</button>
+      </div>
+    </div></div>`);
+
+    window.runRmsSync = async () => {
+      const btn = $('rms-modal-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโอน...`;
+      $('rms-modal-result').innerHTML = rmsSyncLoadingHtml();
+      const res = await post('/api/users.php', { action: 'sync_rms' });
+      btn.disabled = false; btn.textContent = '⬇️ เริ่มโอนข้อมูล';
+      toast(res.message, res.success ? 'success' : 'error');
+      if (res.success) {
+        const d = res.data;
+        $('rms-modal-result').innerHTML = `
+          <div class="anim-fadein d-flex gap-8 mb-8" style="flex-wrap:wrap">
+            <span class="badge badge-approved">เพิ่มใหม่ ${d.created}</span>
+            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${d.updated}</span>
+            <span class="badge badge-rejected">ปิดใช้งาน ${d.deactivated}</span>
+          </div>`;
+        setTimeout(() => { closeModal(); pages.users(); }, 1800);
+      } else {
+        $('rms-modal-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
+      }
+    };
+  };
 
   window.toggleUser = async (id, cur) => {
     const r = await post('/api/users.php', { action:'toggle_active', id });
     if (r.success) pages.users();
   };
   window.resetPwd = async (id) => {
-    const pwd = prompt('รหัสผ่านใหม่:');
+    const pwd = await promptModal({ title:'รีเซ็ตรหัสผ่าน', label:'รหัสผ่านใหม่', placeholder:'กรอกรหัสผ่านใหม่', type:'password', confirmText:'รีเซ็ต' });
     if (!pwd) return;
     const r = await post('/api/users.php', { action:'reset_password', id, new_password:pwd });
     toast(r.message, r.success?'success':'error');
+  };
+  window.deleteUser = async (id) => {
+    const u = (window._usersData||[]).find(x=>x.id===id);
+    const name = u ? u.full_name : '';
+    if (!await confirmModal({ title:'ลบผู้ใช้งาน', message:`ลบผู้ใช้ "${name}" ออกจากระบบถาวร?\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`, confirmText:'ลบถาวร', danger:true })) return;
+    const r = await post('/api/users.php', { action:'delete', id });
+    toast(r.message, r.success?'success':'error');
+    if (r.success) pages.users();
   };
   window.openAddUser = () => {
     showModal(`<div class="modal-overlay"><div class="modal">
@@ -1374,7 +1577,7 @@ pages.institution = async () => {
     toast(r.message, r.success?'success':'error');
   };
   window.deleteHoliday = async (id) => {
-    if (!confirm('ลบวันหยุดนี้?')) return;
+    if (!await confirmModal({ title:'ลบวันหยุด', message:'ยืนยันการลบวันหยุดนี้?', confirmText:'ลบ', danger:true })) return;
     const r = await post('/api/institution.php', { action:'delete_holiday', id });
     toast(r.message, r.success?'success':'error');
     if (r.success) pages.institution();
@@ -1397,6 +1600,285 @@ pages.institution = async () => {
       if (r.success) { closeModal(); pages.institution(); }
     };
   };
+};
+
+/* ── RMS sync loading animation (shared) ──────────── */
+function rmsSyncLoadingHtml() {
+  return `
+    <div class="anim-fadein" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:rgba(123,31,50,.04)">
+      <div class="spinner spinner-lg"></div>
+      <div style="flex:1;min-width:0">
+        <div class="fw-600 fs-13" style="color:#7B1F32">กำลังโอนข้อมูลบุคลากรจาก RMS<span class="sync-dots"><span>.</span><span>.</span><span>.</span></span></div>
+        <div class="fs-11 text-muted" style="margin:6px 0 8px">กำลังเชื่อมต่อและประมวลผลข้อมูล — อาจใช้เวลาสักครู่ อย่าปิดหน้าต่างนี้</div>
+        <div class="progress-indet"></div>
+      </div>
+    </div>`;
+}
+
+/* ── SETTINGS ─────────────────────────────────────── */
+pages.settings = async () => {
+  let activeSection = 'makeup_reasons';
+
+  const sections = [
+    { id: 'makeup_reasons', icon: '🔖', label: 'เหตุผลการสอนชดเชย' },
+    { id: 'integration',    icon: '🔌', label: 'การเชื่อมต่อ RMS' },
+  ];
+
+  const renderShell = () => {
+    $('page-content').innerHTML = `
+      <div class="anim-fadeup">
+        <div class="d-flex gap-16" style="align-items:flex-start">
+          <div class="card" style="width:220px;flex-shrink:0;padding:8px 0">
+            ${sections.map(s => `
+              <div onclick="switchSettingSection('${s.id}')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;cursor:pointer;transition:background .15s;${activeSection===s.id?'background:#7B1F3215;color:#7B1F32;font-weight:600':'color:var(--text)'}">
+                <span style="font-size:16px">${s.icon}</span>
+                <span class="fs-13">${s.label}</span>
+              </div>`).join('')}
+          </div>
+          <div class="flex-1" id="settings-content">
+            <div style="text-align:center;padding:60px;color:var(--muted)">⏳ กำลังโหลด...</div>
+          </div>
+        </div>
+      </div>`;
+    loadSection(activeSection);
+  };
+
+  const loadSection = async (section) => {
+    if (section === 'makeup_reasons') await loadReasonsSection();
+    if (section === 'integration')    await loadIntegrationSection();
+  };
+
+  const loadIntegrationSection = async () => {
+    const r   = await api('/api/settings.php?section=integration');
+    const url = r.data?.rms_base_url || '';
+    const sc  = document.getElementById('settings-content');
+    if (!sc) return;
+
+    sc.innerHTML = `
+      <div class="card mb-18">
+        <div class="card-header"><span>🔌 การเชื่อมต่อระบบ RMS</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">URL ฐานของระบบ RMS (host)</label>
+            <input class="form-control" id="rms-url" value="${url}" placeholder="http://rms.rvc.ac.th">
+            <div class="fs-11 text-muted mt-4">ระบบจะต่อ path <code>/api_connection.php?app_name=nutty&amp;data=people</code> เข้าไปอัตโนมัติ</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="saveRmsUrl()">💾 บันทึก URL</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span>👥 โอนข้อมูลบุคลากรจาก RMS</span></div>
+        <div class="card-body">
+          <div class="fs-13 text-muted mb-14" style="line-height:1.7">
+            ระบบจะดึงข้อมูลบุคลากรจาก RMS แล้ว:
+            <ul style="margin:8px 0 0 18px;padding:0">
+              <li>โอนเฉพาะบุคลากรที่ยังไม่พ้นสภาพ (<code>people_exit = 0</code>)</li>
+              <li>ใช้ <code>people_id</code> เป็นชื่อผู้ใช้ · ชื่อ-สกุลจาก <code>people_name + people_surname</code></li>
+              <li>รหัสผ่านจาก <code>ath_pass</code> (เข้ารหัสก่อนจัดเก็บ)</li>
+              <li>บุคลากรที่พ้นสภาพหรือไม่พบในต้นทางจะถูกตั้งเป็น "ไม่ใช้งาน"</li>
+              <li>ผู้ใช้เดิมที่โอนซ้ำจะไม่อัปเดตวันที่สร้างบัญชี</li>
+            </ul>
+          </div>
+          <button class="btn btn-primary" id="rms-sync-btn" onclick="syncRms()">⬇️ เริ่มโอนข้อมูล</button>
+          <div id="rms-sync-result" class="mt-14"></div>
+        </div>
+      </div>`;
+
+    window.saveRmsUrl = async () => {
+      const res = await post('/api/settings.php', { action: 'save_rms_url', rms_base_url: $('rms-url').value });
+      toast(res.message, res.success ? 'success' : 'error');
+    };
+
+    window.syncRms = async () => {
+      if (!await confirmModal({ title:'โอนข้อมูลจาก RMS', message:'เริ่มโอนข้อมูลบุคลากรจาก RMS?\nข้อมูลผู้ใช้ที่มี people_id เดิมจะถูกอัปเดต', confirmText:'เริ่มโอนข้อมูล', icon:'🔌' })) return;
+      const btn = $('rms-sync-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโอน...`;
+      $('rms-sync-result').innerHTML = rmsSyncLoadingHtml();
+      const res = await post('/api/users.php', { action: 'sync_rms' });
+      btn.disabled = false;
+      btn.textContent = '⬇️ เริ่มโอนข้อมูล';
+      toast(res.message, res.success ? 'success' : 'error');
+      if (res.success) {
+        const d = res.data;
+        $('rms-sync-result').innerHTML = `
+          <div class="anim-fadein d-flex gap-10" style="flex-wrap:wrap">
+            <span class="badge badge-approved">เพิ่มใหม่ ${d.created}</span>
+            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${d.updated}</span>
+            <span class="badge badge-rejected">ปิดใช้งาน ${d.deactivated}</span>
+            <span class="badge badge-draft">บุคลากรในต้นทาง ${d.active_source}</span>
+          </div>`;
+      } else {
+        $('rms-sync-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
+      }
+    };
+  };
+
+  const loadReasonsSection = async () => {
+    const r   = await api('/api/settings.php?section=makeup_reasons');
+    const rss = r.data?.reasons || [];
+    const sc  = document.getElementById('settings-content');
+    if (!sc) return;
+
+    sc.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <span>🔖 เหตุผลการสอนชดเชย</span>
+          <button class="btn btn-primary btn-sm" onclick="openAddReason()">+ เพิ่มเหตุผล</button>
+        </div>
+        <div class="card-body" style="padding-bottom:4px">
+          <div class="fs-12 text-muted">เหตุผลที่ปิดการใช้งานจะไม่ปรากฏในฟอร์มบันทึก แต่ยังแสดงในรายการเดิม รหัส (code) ไม่สามารถเปลี่ยนได้หลังสร้าง</div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:56px;text-align:center">ไอคอน</th>
+              <th>ชื่อเหตุผล</th>
+              <th>รหัส</th>
+              <th class="text-center">สถานะ</th>
+              <th class="text-center">จัดการ</th>
+            </tr></thead>
+            <tbody>
+              ${rss.map(rs => `
+                <tr style="${!rs.is_active ? 'opacity:.45' : ''}">
+                  <td style="font-size:22px;text-align:center">${rs.icon}</td>
+                  <td>
+                    <span class="badge" style="background:${rs.bg_color};color:${rs.color}">${rs.label}</span>
+                    ${!rs.is_deletable ? '<span class="fs-11 text-muted" style="margin-left:6px">(ค่าเริ่มต้น)</span>' : ''}
+                  </td>
+                  <td><code style="font-size:11px;background:var(--bg);padding:2px 7px;border-radius:4px;border:1px solid var(--border)">${rs.code}</code></td>
+                  <td class="text-center">
+                    <button class="btn btn-sm ${rs.is_active ? 'btn-success' : 'btn-ghost'}" onclick="toggleReason(${rs.id})">
+                      ${rs.is_active ? '✅ เปิดใช้งาน' : '⛔ ปิดใช้งาน'}
+                    </button>
+                  </td>
+                  <td class="text-center">
+                    <div class="d-flex gap-8" style="justify-content:center">
+                      <button class="btn btn-outline btn-sm" onclick='openEditReason(${JSON.stringify(rs)})'>✏️ แก้ไข</button>
+                      ${rs.is_deletable ? `<button class="btn btn-danger btn-sm" onclick="deleteReason(${rs.id})">ลบ</button>` : ''}
+                    </div>
+                  </td>
+                </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted)">ไม่มีข้อมูล</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    window.toggleReason = async (id) => {
+      const res = await post('/api/settings.php', { action: 'toggle_reason', id });
+      toast(res.message, res.success ? 'success' : 'error');
+      if (res.success) loadReasonsSection();
+    };
+
+    window.deleteReason = async (id) => {
+      if (!await confirmModal({ title:'ลบเหตุผล', message:'ยืนยันการลบเหตุผลนี้?', confirmText:'ลบ', danger:true })) return;
+      const res = await post('/api/settings.php', { action: 'delete_reason', id });
+      toast(res.message, res.success ? 'success' : 'error');
+      if (res.success) loadReasonsSection();
+    };
+
+    window.openAddReason = () => {
+      showModal(`<div class="modal-overlay"><div class="modal" style="max-width:440px">
+        <div class="modal-header">เพิ่มเหตุผลใหม่<span class="modal-close" onclick="closeModal()">×</span></div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">ชื่อเหตุผล <span style="color:#EF4444">*</span></label>
+            <input class="form-control" id="rs-label" placeholder="เช่น ลาคลอด">
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">รหัส (a-z, _) <span style="color:#EF4444">*</span></label>
+              <input class="form-control" id="rs-code" placeholder="เช่น maternity">
+            </div>
+            <div class="form-group">
+              <label class="form-label">ไอคอน</label>
+              <input class="form-control" id="rs-icon" value="📋" maxlength="4">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">สีป้ายเหตุผล</label>
+            <div class="d-flex align-center gap-10">
+              <input type="color" id="rs-color" value="#6B7280" style="width:48px;height:36px;border-radius:6px;border:1px solid var(--border);padding:2px;cursor:pointer">
+              <span class="fs-12 text-muted">สีที่เลือกจะใช้เป็นสีตัวอักษร พื้นหลังจะสว่างขึ้นอัตโนมัติ</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ลำดับการแสดง</label>
+            <input class="form-control" type="number" id="rs-sort" value="99" min="0" style="width:120px">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn btn-primary" onclick="submitAddReason()">💾 เพิ่มเหตุผล</button>
+        </div>
+      </div></div>`);
+
+      window.submitAddReason = async () => {
+        const label = $('rs-label').value.trim();
+        const code  = $('rs-code').value.trim().replace(/\s+/g, '_').toLowerCase();
+        if (!label || !code) { toast('กรุณากรอกชื่อและรหัส', 'error'); return; }
+        const color = $('rs-color').value;
+        const res   = await post('/api/settings.php', {
+          action: 'add_reason', label, code, icon: $('rs-icon').value,
+          color, bg_color: color + '20', sort_order: +$('rs-sort').value,
+        });
+        toast(res.message, res.success ? 'success' : 'error');
+        if (res.success) { closeModal(); loadReasonsSection(); }
+      };
+    };
+
+    window.openEditReason = (rs) => {
+      showModal(`<div class="modal-overlay"><div class="modal" style="max-width:440px">
+        <div class="modal-header">แก้ไขเหตุผล<span class="modal-close" onclick="closeModal()">×</span></div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">ชื่อเหตุผล</label>
+            <input class="form-control" id="re-label" value="${rs.label}">
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">รหัส</label>
+              <input class="form-control" value="${rs.code}" disabled style="opacity:.6;cursor:not-allowed">
+            </div>
+            <div class="form-group">
+              <label class="form-label">ไอคอน</label>
+              <input class="form-control" id="re-icon" value="${rs.icon}" maxlength="4">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">สีป้าย</label>
+              <input type="color" id="re-color" value="${rs.color}" style="width:48px;height:36px;border-radius:6px;border:1px solid var(--border);padding:2px;cursor:pointer">
+            </div>
+            <div class="form-group">
+              <label class="form-label">ลำดับการแสดง</label>
+              <input class="form-control" type="number" id="re-sort" value="${rs.sort_order}" min="0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn btn-primary" onclick="submitEditReason(${rs.id})">💾 บันทึก</button>
+        </div>
+      </div></div>`);
+
+      window.submitEditReason = async (id) => {
+        const color = $('re-color').value;
+        const res   = await post('/api/settings.php', {
+          action: 'update_reason', id,
+          label: $('re-label').value, icon: $('re-icon').value,
+          color, bg_color: color + '20', sort_order: +$('re-sort').value,
+        });
+        toast(res.message, res.success ? 'success' : 'error');
+        if (res.success) { closeModal(); loadReasonsSection(); }
+      };
+    };
+  };
+
+  window.switchSettingSection = (s) => { activeSection = s; renderShell(); };
+  renderShell();
 };
 
 /* ── INIT ─────────────────────────────────────────── */
