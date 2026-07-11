@@ -1,0 +1,21 @@
+# Lock files
+install.lock
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Config with secrets (keep template)
+# config/config.php  ← comment out if you want to track it
+
+# PHP errors / logs
+*.log
+error_log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

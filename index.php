@@ -1,0 +1,110 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/includes/auth.php';
+Auth::requireLogin();
+$user = Auth::user();
+
+$roleLabels = [
+    'admin'      => 'ผู้ดูแลระบบ',
+    'director'   => 'ผู้อำนวยการ',
+    'curriculum' => 'งานหลักสูตร',
+    'teacher'    => 'ครูผู้สอน',
+    'accounting' => 'งานบัญชี',
+];
+$roleLabel  = $roleLabels[$user['role']] ?? $user['role'];
+$initial    = mb_substr($user['full_name'], 0, 1);
+?>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title><?= APP_NAME ?></title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="<?= BASE_URL ?>/assets/css/style.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app" data-theme="light">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">🎓</div>
+      <div>
+        <div class="sb-title">ระบบเบิกค่าตอบแทน</div>
+        <div class="sb-sub">การสอนเกินภาระงาน</div>
+      </div>
+    </div>
+    <div class="sb-user" id="sb-user-area">
+      <div class="d-flex align-center justify-between mb-8">
+        <div class="sb-username"><?= htmlspecialchars($user['full_name']) ?></div>
+        <a href="<?= BASE_URL ?>/logout.php" class="sb-logout">ออก</a>
+      </div>
+      <div style="font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">บทบาท</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.8);font-weight:600"><?= htmlspecialchars($roleLabel) ?></div>
+    </div>
+    <nav class="sb-nav" id="nav-menu"></nav>
+    <div class="sb-bottom">
+      <div class="theme-switcher" id="theme-switcher">
+        <div class="theme-btn active" data-theme="light" title="สว่าง">☀️<div class="theme-label" style="font-size:9px;margin-top:1px">สว่าง</div></div>
+        <div class="theme-btn" data-theme="dark"  title="มืด">🌙<div class="theme-label" style="font-size:9px;margin-top:1px">มืด</div></div>
+        <div class="theme-btn" data-theme="system" title="ระบบ">💻<div class="theme-label" style="font-size:9px;margin-top:1px">ระบบ</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <div id="main">
+    <!-- Header -->
+    <header id="topbar">
+      <div id="toggle-sidebar" style="cursor:pointer;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)">☰</div>
+      <div class="flex-1" style="min-width:0">
+        <div class="topbar-title" id="page-title">ภาพรวมระบบ</div>
+        <div class="topbar-sub">วิทยาลัยเทคนิคสัตหีบ • ภาคเรียนที่ 1/2568</div>
+      </div>
+      <div class="d-flex align-center gap-10">
+        <span class="role-badge"><?= htmlspecialchars($roleLabel) ?></span>
+        <!-- Notification -->
+        <div style="position:relative" id="notif-root">
+          <div class="notif-btn" id="notif-btn">🔔<div class="notif-dot" id="notif-dot" style="display:none"></div></div>
+          <div class="dropdown" id="notif-dropdown" style="display:none;right:0;top:42px;width:320px">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <div style="font-weight:700;font-size:13px">การแจ้งเตือน</div>
+              <div id="mark-all-read" style="font-size:11px;color:#7B1F32;cursor:pointer;font-weight:500">อ่านทั้งหมด</div>
+            </div>
+            <div id="notif-list" style="max-height:320px;overflow-y:auto"></div>
+            <div style="padding:10px 16px;text-align:center;font-size:12px;color:#7B1F32;cursor:pointer;font-weight:600;border-top:1px solid var(--border)">ดูทั้งหมด →</div>
+          </div>
+        </div>
+        <div class="avatar"><?= htmlspecialchars($initial) ?></div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div id="content">
+      <div id="page-content" style="animation:fadeUp .22s ease both"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TOAST CONTAINER ══ -->
+<div id="toast-container"></div>
+
+<!-- ══ MODAL CONTAINER ══ -->
+<div id="modal-container"></div>
+
+<!-- ══ CONFIG ══ -->
+<script>
+const APP_CONFIG = {
+  baseUrl: '<?= BASE_URL ?>',
+  role: '<?= $user['role'] ?>',
+  userId: <?= $user['id'] ?>,
+  userName: <?= json_encode($user['full_name']) ?>,
+  deptId: <?= $user['dept_id'] ?? 'null' ?>,
+};
+</script>
+<script src="<?= BASE_URL ?>/assets/js/app.js"></script>
+</body>
+</html>
