@@ -1684,7 +1684,7 @@ pages.settings = async () => {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card mb-18">
         <div class="card-header"><span>👥 โอนข้อมูลบุคลากรจาก RMS</span></div>
         <div class="card-body">
           <div class="fs-13 text-muted mb-14" style="line-height:1.7">
@@ -1700,11 +1700,53 @@ pages.settings = async () => {
           <button class="btn btn-primary" id="rms-sync-btn" onclick="syncRms()">⬇️ เริ่มโอนข้อมูล</button>
           <div id="rms-sync-result" class="mt-14"></div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span>🎌 โหลดวันหยุดจาก RMS</span></div>
+        <div class="card-body">
+          <div class="fs-13 text-muted mb-14" style="line-height:1.7">
+            ระบบจะดึงข้อมูลวันหยุดจาก RMS (<code>data=stopday</code>) แล้ว:
+            <ul style="margin:8px 0 0 18px;padding:0">
+              <li>เพิ่มเฉพาะวันหยุดที่ปีการศึกษา/ภาคเรียน (<code>stopday_eduyear</code>) ตรงกับภาคเรียนในระบบ</li>
+              <li>ข้ามรายการที่มีวันหยุดวันเดียวกันอยู่แล้ว (โหลดซ้ำได้)</li>
+            </ul>
+          </div>
+          <button class="btn btn-primary" id="hol-sync-btn" onclick="syncHolidaysFromSettings()">⬇️ โหลดวันหยุด</button>
+          <div id="hol-sync-result" class="mt-14"></div>
+        </div>
       </div>`;
 
     window.saveRmsUrl = async () => {
       const res = await post('/api/settings.php', { action: 'save_rms_url', rms_base_url: $('rms-url').value });
       toast(res.message, res.success ? 'success' : 'error');
+    };
+
+    window.syncHolidaysFromSettings = async () => {
+      if (!await confirmModal({
+        title:'โหลดวันหยุดจาก RMS',
+        message:'ดึงข้อมูลวันหยุดจากระบบ RMS?\nจะเพิ่มเฉพาะวันหยุดที่ตรงกับภาคเรียนในระบบ และข้ามรายการที่มีอยู่แล้ว',
+        confirmText:'โหลดข้อมูล', icon:'🎌',
+      })) return;
+      const btn = $('hol-sync-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโหลด...`;
+      $('hol-sync-result').innerHTML = rmsSyncLoadingHtml();
+      const res = await post('/api/institution.php', { action: 'sync_holidays' });
+      btn.disabled = false;
+      btn.textContent = '⬇️ โหลดวันหยุด';
+      toast(res.message, res.success ? 'success' : 'error');
+      if (res.success) {
+        const d = res.data;
+        $('hol-sync-result').innerHTML = `
+          <div class="anim-fadein d-flex gap-10" style="flex-wrap:wrap">
+            <span class="badge badge-approved">เพิ่มใหม่ ${d.added}</span>
+            <span class="badge" style="background:#3B82F620;color:#3B82F6">ซ้ำ ${d.duplicated}</span>
+            <span class="badge badge-draft">ข้าม ${d.skipped}</span>
+          </div>`;
+      } else {
+        $('hol-sync-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
+      }
     };
 
     window.syncRms = async () => {
