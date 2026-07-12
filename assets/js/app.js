@@ -1737,6 +1737,15 @@ pages.settings = async () => {
           <li>เก็บระดับชั้น ชื่อกลุ่ม ชื่อย่อ และครูที่ปรึกษา</li></ul>`,
         badges:d => badge('เพิ่มใหม่',d.added,'badge-approved') + badge('อัปเดต',d.updated,'','background:#3B82F620;color:#3B82F6') + badge('ข้าม',d.skipped,'badge-draft'),
       },
+      {
+        key:'student', icon:'🧑‍🎓', title:'โหลดข้อมูลผู้เรียน', data:'std2018_student', btn:'โหลดผู้เรียน',
+        api:'/api/students.php', chunked:true, row:100,
+        confirm:{ title:'โหลดข้อมูลผู้เรียนจาก RMS', message:'ดึงข้อมูลผู้เรียนทั้งหมดจากระบบ RMS?\nเนื่องจากมีจำนวนมาก ระบบจะทยอยโหลดทีละท่อนจนครบ (อย่าปิดหน้านี้)', confirmText:'เริ่มโหลด', icon:'🧑‍🎓' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>โหลดแบบแบ่งท่อน (batch ละ 100 รายการ) จนครบทั้งหมด</li>
+          <li>upsert ตามรหัสผู้เรียน (<code>studentID</code>) — โหลดซ้ำได้</li>
+          <li>เก็บชื่อ-สกุล กลุ่มเรียน ระดับชั้น สาขา สถานะ และ GPAX</li></ul>`,
+      },
     ];
 
     sc.innerHTML = `
@@ -1774,6 +1783,7 @@ pages.settings = async () => {
                 <summary style="cursor:pointer;font-size:12px;color:#7B1F32;user-select:none">ดูรายละเอียด</summary>
                 <div class="fs-12 text-muted" style="line-height:1.7;margin-top:6px">${t.details}</div>
               </details>
+              <div id="rt-prog-${t.key}"></div>
             </div>`).join('')}
         </div>
       </div>`;
@@ -1783,14 +1793,18 @@ pages.settings = async () => {
       toast(res.message, res.success ? 'success' : 'error');
     };
 
+    const btnSpinner = (label) =>
+      `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>${label}`;
+
     window.runRmsTransfer = async (key) => {
       const cfg = transfers.find(t => t.key === key);
       if (!cfg) return;
+      if (cfg.chunked) return runChunkedTransfer(cfg);
       if (!await confirmModal(cfg.confirm)) return;
       const btn = $('rt-btn-' + key);
       const res = $('rt-res-' + key);
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังทำงาน...`;
+      btn.innerHTML = btnSpinner('กำลังทำงาน...');
       res.innerHTML = `<span class="fs-11 text-muted">กำลังเชื่อมต่อ RMS…</span>`;
       const r = await post(cfg.api, cfg.body);
       btn.disabled = false;
@@ -1800,6 +1814,71 @@ pages.settings = async () => {
         ? `<div class="anim-fadein d-flex gap-6" style="flex-wrap:wrap;justify-content:flex-end">${cfg.badges(r.data)}</div>`
         : `<div class="fs-12" style="color:#EF4444">${r.message}</div>`;
     };
+
+    const progressBar = (done, total) => {
+      const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+      return `
+        <div class="mt-10">
+          <div class="d-flex justify-between fs-11 text-muted mb-4">
+            <span>กำลังโหลด ${fmtN(done)} / ${fmtN(total)} รายการ</span><span>${pct}%</span>
+          </div>
+          <div class="progress-track"><div class="progress-bar" style="width:${pct}%;background:#7B1F32"></div></div>
+        </div>`;
+    };
+
+    async function runChunkedTransfer(cfg) {
+      if (!await confirmModal(cfg.confirm)) return;
+      const btn  = $('rt-btn-' + cfg.key);
+      const res  = $('rt-res-' + cfg.key);
+      const prog = $('rt-prog-' + cfg.key);
+      btn.disabled = true;
+      btn.innerHTML = btnSpinner('กำลังนับ...');
+      res.innerHTML = '';
+      prog.innerHTML = `<div class="fs-11 text-muted mt-10">กำลังนับจำนวนข้อมูลในระบบ RMS…</div>`;
+
+      const cRes = await post(cfg.api, { action: 'count' });
+      if (!cRes.success) {
+        btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
+        prog.innerHTML = `<div class="fs-12 mt-10" style="color:#EF4444">${cRes.message}</div>`;
+        return;
+      }
+      const total = cRes.data.total || 0;
+      const row = cfg.row || 100;
+      let offset = 0, added = 0, updated = 0, done = 0, failed = false;
+
+      btn.innerHTML = btnSpinner('กำลังโหลด...');
+      prog.innerHTML = progressBar(0, total);
+
+      while (offset < total) {
+        const bRes = await post(cfg.api, { action: 'sync_batch', offset, row });
+        if (!bRes.success) {
+          failed = true;
+          prog.innerHTML = progressBar(done, total) +
+            `<div class="fs-12 mt-6" style="color:#EF4444">หยุดที่ ${fmtN(done)} รายการ: ${bRes.message}</div>`;
+          break;
+        }
+        added   += bRes.data.added;
+        updated += bRes.data.updated;
+        const fetched = bRes.data.fetched || 0;
+        done   += fetched;
+        offset += row;
+        prog.innerHTML = progressBar(Math.min(done, total), total);
+        if (fetched < row) break; // ครบแล้ว (ท่อนสุดท้ายน้อยกว่า row)
+      }
+
+      btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
+      if (!failed) {
+        toast(`โหลดผู้เรียนสำเร็จ ${fmtN(done)} รายการ`, 'success');
+        prog.innerHTML = `
+          <div class="anim-fadein d-flex gap-6 mt-10" style="flex-wrap:wrap">
+            <span class="badge badge-approved">เพิ่มใหม่ ${fmtN(added)}</span>
+            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${fmtN(updated)}</span>
+            <span class="badge badge-draft">รวม ${fmtN(done)} รายการ</span>
+          </div>`;
+      } else {
+        toast('โหลดข้อมูลไม่สำเร็จทั้งหมด', 'error');
+      }
+    }
   };
 
   const loadReasonsSection = async () => {

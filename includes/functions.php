@@ -61,6 +61,41 @@ function set_setting(string $key, string $value): void
     );
 }
 
+/**
+ * ดึงข้อมูล JSON จากระบบ RMS — host จาก app_settings, ต่อ query ที่ให้มา
+ * ตัวอย่าง $query: 'data=std2018_student&count=yes'
+ * คืน array ที่ decode แล้ว หรือ json_err (exit) เมื่อผิดพลาด
+ */
+function rms_fetch_json(string $query): array
+{
+    $base = rtrim((string)get_setting('rms_base_url', 'http://rms.rvc.ac.th'), '/');
+    if ($base === '') json_err('ยังไม่ได้ตั้งค่า URL ของระบบ RMS');
+    $url = $base . '/api_connection.php?app_name=nutty&' . ltrim($query, '&');
+
+    $raw = false;
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $raw = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+        if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ: ' . $err);
+    } else {
+        $ctx = stream_context_create(['http' => ['timeout' => 60]]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ');
+    }
+
+    $data = json_decode($raw, true);
+    if (!is_array($data)) json_err('ข้อมูลจาก RMS ไม่อยู่ในรูปแบบ JSON ที่ถูกต้อง');
+    return $data;
+}
+
 function get_teacher_by_user(int $userId): ?array
 {
     return DB::fetch('SELECT * FROM teachers WHERE user_id = ? AND is_active = 1', [$userId]);
