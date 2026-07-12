@@ -1692,148 +1692,104 @@ pages.settings = async () => {
     const sc  = document.getElementById('settings-content');
     if (!sc) return;
 
+    const badge = (label, val, cls, style='') =>
+      `<span class="badge ${cls}" ${style?`style="${style}"`:''}>${label} ${val}</span>`;
+
+    // รายการโอนข้อมูลจาก RMS — เพิ่มรายการใหม่ในอนาคตได้ที่ array นี้
+    const transfers = [
+      {
+        key:'people', icon:'👥', title:'โอนข้อมูลบุคลากร', data:'people', btn:'เริ่มโอนข้อมูล',
+        api:'/api/users.php', body:{ action:'sync_rms' },
+        confirm:{ title:'โอนข้อมูลบุคลากรจาก RMS', message:'เริ่มโอนข้อมูลบุคลากรจาก RMS?\nข้อมูลผู้ใช้ที่มี people_id เดิมจะถูกอัปเดต', confirmText:'เริ่มโอนข้อมูล', icon:'👥' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>โอนเฉพาะบุคลากรที่ยังไม่พ้นสภาพ (<code>people_exit = 0</code>)</li>
+          <li>ใช้ <code>people_id</code> เป็นชื่อผู้ใช้ · ชื่อ-สกุลจาก <code>people_name + people_surname</code></li>
+          <li>รหัสผ่านจาก <code>ath_pass</code> (เข้ารหัสก่อนจัดเก็บ)</li>
+          <li>บุคลากรที่พ้นสภาพหรือไม่พบในต้นทางจะถูกตั้งเป็น "ไม่ใช้งาน"</li>
+          <li>ผู้ใช้เดิมที่โอนซ้ำจะไม่อัปเดตวันที่สร้างบัญชี</li></ul>`,
+        badges:d => badge('เพิ่มใหม่',d.created,'badge-approved') + badge('อัปเดต',d.updated,'','background:#3B82F620;color:#3B82F6')
+                  + badge('ปิดใช้งาน',d.deactivated,'badge-rejected') + badge('บุคลากรในต้นทาง',d.active_source,'badge-draft'),
+      },
+      {
+        key:'dateedu', icon:'📆', title:'โหลดข้อมูลภาคเรียน', data:'dateedu', btn:'โหลดภาคเรียน',
+        api:'/api/institution.php', body:{ action:'sync_semesters' },
+        confirm:{ title:'โหลดภาคเรียนจาก RMS', message:'ดึงข้อมูลภาคเรียนจากระบบ RMS?\nจะสร้าง/อัปเดตภาคเรียนตามข้อมูลต้นทาง โดยไม่เปลี่ยนภาคเรียนปัจจุบัน', confirmText:'โหลดข้อมูล', icon:'📆' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>สร้าง/อัปเดตภาคเรียนตามปีการศึกษา (<code>dateedu_eduyear</code>) พร้อมวันเปิด-ปิดภาคเรียน</li>
+          <li>ไม่เปลี่ยนแปลงภาคเรียนปัจจุบันที่กำหนดไว้ (โหลดซ้ำได้)</li></ul>`,
+        badges:d => badge('เพิ่มใหม่',d.added,'badge-approved') + badge('อัปเดต',d.updated,'','background:#3B82F620;color:#3B82F6') + badge('ข้าม',d.skipped,'badge-draft'),
+      },
+      {
+        key:'stopday', icon:'🎌', title:'โหลดวันหยุด', data:'stopday', btn:'โหลดวันหยุด',
+        api:'/api/institution.php', body:{ action:'sync_holidays' },
+        confirm:{ title:'โหลดวันหยุดจาก RMS', message:'ดึงข้อมูลวันหยุดจากระบบ RMS?\nจะเพิ่มเฉพาะวันหยุดที่ตรงกับภาคเรียนในระบบ และข้ามรายการที่มีอยู่แล้ว', confirmText:'โหลดข้อมูล', icon:'🎌' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>เพิ่มเฉพาะวันหยุดที่ปีการศึกษา/ภาคเรียน (<code>stopday_eduyear</code>) ตรงกับภาคเรียนในระบบ</li>
+          <li>ข้ามรายการที่มีวันหยุดวันเดียวกันอยู่แล้ว (โหลดซ้ำได้)</li></ul>`,
+        badges:d => badge('เพิ่มใหม่',d.added,'badge-approved') + badge('ซ้ำ',d.duplicated,'','background:#3B82F620;color:#3B82F6') + badge('ข้าม',d.skipped,'badge-draft'),
+      },
+    ];
+
     sc.innerHTML = `
       <div class="card mb-18">
         <div class="card-header"><span>🔌 การเชื่อมต่อระบบ RMS</span></div>
         <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">URL ฐานของระบบ RMS (host)</label>
-            <input class="form-control" id="rms-url" value="${url}" placeholder="http://rms.rvc.ac.th">
-            <div class="fs-11 text-muted mt-4">ระบบจะต่อ path <code>/api_connection.php?app_name=nutty&amp;data=people</code> เข้าไปอัตโนมัติ</div>
+          <label class="form-label">URL ฐานของระบบ RMS (host)</label>
+          <div class="d-flex gap-8 align-center" style="flex-wrap:wrap">
+            <input class="form-control flex-1" id="rms-url" value="${url}" placeholder="http://rms.rvc.ac.th" style="min-width:220px">
+            <button class="btn btn-outline btn-sm" onclick="saveRmsUrl()">💾 บันทึก</button>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="saveRmsUrl()">💾 บันทึก URL</button>
-        </div>
-      </div>
-
-      <div class="card mb-18">
-        <div class="card-header"><span>👥 โอนข้อมูลบุคลากรจาก RMS</span></div>
-        <div class="card-body">
-          <div class="fs-13 text-muted mb-14" style="line-height:1.7">
-            ระบบจะดึงข้อมูลบุคลากรจาก RMS แล้ว:
-            <ul style="margin:8px 0 0 18px;padding:0">
-              <li>โอนเฉพาะบุคลากรที่ยังไม่พ้นสภาพ (<code>people_exit = 0</code>)</li>
-              <li>ใช้ <code>people_id</code> เป็นชื่อผู้ใช้ · ชื่อ-สกุลจาก <code>people_name + people_surname</code></li>
-              <li>รหัสผ่านจาก <code>ath_pass</code> (เข้ารหัสก่อนจัดเก็บ)</li>
-              <li>บุคลากรที่พ้นสภาพหรือไม่พบในต้นทางจะถูกตั้งเป็น "ไม่ใช้งาน"</li>
-              <li>ผู้ใช้เดิมที่โอนซ้ำจะไม่อัปเดตวันที่สร้างบัญชี</li>
-            </ul>
-          </div>
-          <button class="btn btn-primary" id="rms-sync-btn" onclick="syncRms()">⬇️ เริ่มโอนข้อมูล</button>
-          <div id="rms-sync-result" class="mt-14"></div>
-        </div>
-      </div>
-
-      <div class="card mb-18">
-        <div class="card-header"><span>📆 โหลดข้อมูลภาคเรียนจาก RMS</span></div>
-        <div class="card-body">
-          <div class="fs-13 text-muted mb-14" style="line-height:1.7">
-            ระบบจะดึงข้อมูลภาคเรียนจาก RMS (<code>data=dateedu</code>) แล้ว:
-            <ul style="margin:8px 0 0 18px;padding:0">
-              <li>สร้าง/อัปเดตภาคเรียนตามปีการศึกษา (<code>dateedu_eduyear</code>) พร้อมวันเปิด-ปิดภาคเรียน</li>
-              <li>ไม่เปลี่ยนแปลงภาคเรียนปัจจุบันที่กำหนดไว้ (โหลดซ้ำได้)</li>
-            </ul>
-          </div>
-          <button class="btn btn-primary" id="sem-sync-btn" onclick="syncSemesters()">⬇️ โหลดภาคเรียน</button>
-          <div id="sem-sync-result" class="mt-14"></div>
+          <div class="fs-11 text-muted mt-4">ระบบจะต่อ path <code>/api_connection.php?app_name=nutty&amp;data=…</code> เข้าไปอัตโนมัติ</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-header"><span>🎌 โหลดวันหยุดจาก RMS</span></div>
-        <div class="card-body">
-          <div class="fs-13 text-muted mb-14" style="line-height:1.7">
-            ระบบจะดึงข้อมูลวันหยุดจาก RMS (<code>data=stopday</code>) แล้ว:
-            <ul style="margin:8px 0 0 18px;padding:0">
-              <li>เพิ่มเฉพาะวันหยุดที่ปีการศึกษา/ภาคเรียน (<code>stopday_eduyear</code>) ตรงกับภาคเรียนในระบบ</li>
-              <li>ข้ามรายการที่มีวันหยุดวันเดียวกันอยู่แล้ว (โหลดซ้ำได้)</li>
-            </ul>
-          </div>
-          <button class="btn btn-primary" id="hol-sync-btn" onclick="syncHolidaysFromSettings()">⬇️ โหลดวันหยุด</button>
-          <div id="hol-sync-result" class="mt-14"></div>
+        <div class="card-header"><span>⬇️ โอนข้อมูลจาก RMS</span></div>
+        <div class="card-body" style="padding:4px 0">
+          ${transfers.map((t,i) => `
+            <div style="padding:14px 18px;${i<transfers.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div class="d-flex align-center justify-between gap-10" style="flex-wrap:wrap">
+                <div class="d-flex align-center gap-10">
+                  <div style="width:36px;height:36px;border-radius:9px;background:#7B1F3215;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${t.icon}</div>
+                  <div>
+                    <div class="fw-600 fs-13">${t.title}</div>
+                    <div class="fs-11 text-muted"><code>data=${t.data}</code></div>
+                  </div>
+                </div>
+                <div class="d-flex align-center gap-10" style="flex-wrap:wrap">
+                  <div id="rt-res-${t.key}"></div>
+                  <button class="btn btn-primary btn-sm" id="rt-btn-${t.key}" onclick="runRmsTransfer('${t.key}')">⬇️ ${t.btn}</button>
+                </div>
+              </div>
+              <details style="margin-top:8px">
+                <summary style="cursor:pointer;font-size:12px;color:#7B1F32;user-select:none">ดูรายละเอียด</summary>
+                <div class="fs-12 text-muted" style="line-height:1.7;margin-top:6px">${t.details}</div>
+              </details>
+            </div>`).join('')}
         </div>
       </div>`;
-
-    window.syncSemesters = async () => {
-      if (!await confirmModal({
-        title:'โหลดภาคเรียนจาก RMS',
-        message:'ดึงข้อมูลภาคเรียนจากระบบ RMS?\nจะสร้าง/อัปเดตภาคเรียนตามข้อมูลต้นทาง โดยไม่เปลี่ยนภาคเรียนปัจจุบัน',
-        confirmText:'โหลดข้อมูล', icon:'📆',
-      })) return;
-      const btn = $('sem-sync-btn');
-      btn.disabled = true;
-      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโหลด...`;
-      $('sem-sync-result').innerHTML = rmsSyncLoadingHtml();
-      const res = await post('/api/institution.php', { action: 'sync_semesters' });
-      btn.disabled = false;
-      btn.textContent = '⬇️ โหลดภาคเรียน';
-      toast(res.message, res.success ? 'success' : 'error');
-      if (res.success) {
-        const d = res.data;
-        $('sem-sync-result').innerHTML = `
-          <div class="anim-fadein d-flex gap-10" style="flex-wrap:wrap">
-            <span class="badge badge-approved">เพิ่มใหม่ ${d.added}</span>
-            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${d.updated}</span>
-            <span class="badge badge-draft">ข้าม ${d.skipped}</span>
-          </div>`;
-      } else {
-        $('sem-sync-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
-      }
-    };
 
     window.saveRmsUrl = async () => {
       const res = await post('/api/settings.php', { action: 'save_rms_url', rms_base_url: $('rms-url').value });
       toast(res.message, res.success ? 'success' : 'error');
     };
 
-    window.syncHolidaysFromSettings = async () => {
-      if (!await confirmModal({
-        title:'โหลดวันหยุดจาก RMS',
-        message:'ดึงข้อมูลวันหยุดจากระบบ RMS?\nจะเพิ่มเฉพาะวันหยุดที่ตรงกับภาคเรียนในระบบ และข้ามรายการที่มีอยู่แล้ว',
-        confirmText:'โหลดข้อมูล', icon:'🎌',
-      })) return;
-      const btn = $('hol-sync-btn');
+    window.runRmsTransfer = async (key) => {
+      const cfg = transfers.find(t => t.key === key);
+      if (!cfg) return;
+      if (!await confirmModal(cfg.confirm)) return;
+      const btn = $('rt-btn-' + key);
+      const res = $('rt-res-' + key);
       btn.disabled = true;
-      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโหลด...`;
-      $('hol-sync-result').innerHTML = rmsSyncLoadingHtml();
-      const res = await post('/api/institution.php', { action: 'sync_holidays' });
+      btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังทำงาน...`;
+      res.innerHTML = `<span class="fs-11 text-muted">กำลังเชื่อมต่อ RMS…</span>`;
+      const r = await post(cfg.api, cfg.body);
       btn.disabled = false;
-      btn.textContent = '⬇️ โหลดวันหยุด';
-      toast(res.message, res.success ? 'success' : 'error');
-      if (res.success) {
-        const d = res.data;
-        $('hol-sync-result').innerHTML = `
-          <div class="anim-fadein d-flex gap-10" style="flex-wrap:wrap">
-            <span class="badge badge-approved">เพิ่มใหม่ ${d.added}</span>
-            <span class="badge" style="background:#3B82F620;color:#3B82F6">ซ้ำ ${d.duplicated}</span>
-            <span class="badge badge-draft">ข้าม ${d.skipped}</span>
-          </div>`;
-      } else {
-        $('hol-sync-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
-      }
-    };
-
-    window.syncRms = async () => {
-      if (!await confirmModal({ title:'โอนข้อมูลจาก RMS', message:'เริ่มโอนข้อมูลบุคลากรจาก RMS?\nข้อมูลผู้ใช้ที่มี people_id เดิมจะถูกอัปเดต', confirmText:'เริ่มโอนข้อมูล', icon:'🔌' })) return;
-      const btn = $('rms-sync-btn');
-      btn.disabled = true;
-      btn.innerHTML = `<span class="spinner" style="width:15px;height:15px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>กำลังโอน...`;
-      $('rms-sync-result').innerHTML = rmsSyncLoadingHtml();
-      const res = await post('/api/users.php', { action: 'sync_rms' });
-      btn.disabled = false;
-      btn.textContent = '⬇️ เริ่มโอนข้อมูล';
-      toast(res.message, res.success ? 'success' : 'error');
-      if (res.success) {
-        const d = res.data;
-        $('rms-sync-result').innerHTML = `
-          <div class="anim-fadein d-flex gap-10" style="flex-wrap:wrap">
-            <span class="badge badge-approved">เพิ่มใหม่ ${d.created}</span>
-            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${d.updated}</span>
-            <span class="badge badge-rejected">ปิดใช้งาน ${d.deactivated}</span>
-            <span class="badge badge-draft">บุคลากรในต้นทาง ${d.active_source}</span>
-          </div>`;
-      } else {
-        $('rms-sync-result').innerHTML = `<div class="fs-13" style="color:#EF4444">${res.message}</div>`;
-      }
+      btn.textContent = '⬇️ ' + cfg.btn;
+      toast(r.message, r.success ? 'success' : 'error');
+      res.innerHTML = r.success
+        ? `<div class="anim-fadein d-flex gap-6" style="flex-wrap:wrap;justify-content:flex-end">${cfg.badges(r.data)}</div>`
+        : `<div class="fs-12" style="color:#EF4444">${r.message}</div>`;
     };
   };
 
