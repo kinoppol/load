@@ -1516,7 +1516,7 @@ pages.users = async () => {
 pages.institution = async () => {
   const r = await api('/api/institution.php');
   if (!r.success) return;
-  const { institution: inst, holidays, current_semester: sem } = r.data;
+  const { institution: inst, holidays, current_semester: sem, semesters = [] } = r.data;
 
   $('page-content').innerHTML = `
     <div class="anim-fadeup grid-2" style="align-items:flex-start;max-width:920px">
@@ -1561,6 +1561,20 @@ pages.institution = async () => {
             </div>
           </div>
         </div>
+
+        <div class="card mt-18">
+          <div class="card-header">📚 ภาคเรียนทั้งหมด <span class="fs-11 text-muted">${semesters.length} ภาคเรียน</span></div>
+          <div class="card-body" style="padding:6px 0">
+            ${semesters.map(s=>`
+              <div class="d-flex align-center justify-between" style="padding:10px 18px;border-bottom:1px solid var(--border)">
+                <div>
+                  <div class="fw-600 fs-13">${s.name} ${s.is_current==1?'<span class="badge badge-approved" style="margin-left:4px">ปัจจุบัน</span>':''}</div>
+                  <div class="fs-11 text-muted">${thaiDate(s.start_date)} – ${thaiDate(s.end_date)}</div>
+                </div>
+                ${can('admin','director') && s.is_current!=1 ? `<button class="btn btn-outline btn-sm" onclick="setCurrentSem(${s.id})">ตั้งเป็นปัจจุบัน</button>` : ''}
+              </div>`).join('')||'<div class="text-muted text-center" style="padding:20px">ไม่มีข้อมูลภาคเรียน</div>'}
+          </div>
+        </div>
       </div>
     </div>`;
 
@@ -1578,6 +1592,13 @@ pages.institution = async () => {
       start_date:$('sem-start').value, end_date:$('sem-end').value,
     });
     toast(r.message, r.success?'success':'error');
+  };
+  window.setCurrentSem = async (id) => {
+    const s = semesters.find(x => x.id == id);
+    if (!await confirmModal({ title:'ตั้งภาคเรียนปัจจุบัน', message:`ตั้ง "${s?.name||''}" เป็นภาคเรียนปัจจุบัน?`, confirmText:'ตั้งเป็นปัจจุบัน', icon:'📆' })) return;
+    const r = await post('/api/institution.php', { action:'set_current_semester', id });
+    toast(r.message, r.success?'success':'error');
+    if (r.success) pages.institution();
   };
   window.deleteHoliday = async (id) => {
     if (!await confirmModal({ title:'ลบวันหยุด', message:'ยืนยันการลบวันหยุดนี้?', confirmText:'ลบ', danger:true })) return;

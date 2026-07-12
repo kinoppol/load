@@ -59,6 +59,14 @@ if ($method === 'POST') {
         json_ok(null,'บันทึกปฏิทินการศึกษาสำเร็จ');
     }
 
+    if ($action === 'set_current_semester') {
+        $sid = (int)($d['id'] ?? 0);
+        if (!DB::fetch('SELECT id FROM semesters WHERE id=?', [$sid])) json_err('ไม่พบภาคเรียน');
+        DB::exec('UPDATE semesters SET is_current=0');
+        DB::exec('UPDATE semesters SET is_current=1 WHERE id=?', [$sid]);
+        json_ok(null, 'ตั้งเป็นภาคเรียนปัจจุบันสำเร็จ');
+    }
+
     if ($action === 'add_holiday') {
         $id = DB::insert(
             'INSERT INTO holidays (semester_id,name,holiday_date) VALUES (?,?,?)',
