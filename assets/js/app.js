@@ -1543,7 +1543,10 @@ pages.institution = async () => {
       <div>
         <div class="card">
           <div class="card-header">🎌 วันหยุดสถานศึกษา
-            <button class="btn btn-outline btn-sm" onclick="openAddHoliday()">+ เพิ่ม</button>
+            <div class="d-flex gap-6">
+              ${can('admin','director') ? `<button class="btn btn-outline btn-sm" onclick="syncHolidays()">🔌 โหลดจาก RMS</button>` : ''}
+              <button class="btn btn-outline btn-sm" onclick="openAddHoliday()">+ เพิ่ม</button>
+            </div>
           </div>
           <div class="card-body">
             <div id="holiday-list">
@@ -1581,6 +1584,19 @@ pages.institution = async () => {
     const r = await post('/api/institution.php', { action:'delete_holiday', id });
     toast(r.message, r.success?'success':'error');
     if (r.success) pages.institution();
+  };
+  window.syncHolidays = async () => {
+    if (!await confirmModal({
+      title:'โหลดวันหยุดจาก RMS',
+      message:'ดึงข้อมูลวันหยุดจากระบบ RMS?\nจะเพิ่มเฉพาะวันหยุดที่ตรงกับภาคเรียนในระบบ และข้ามรายการที่มีอยู่แล้ว',
+      confirmText:'โหลดข้อมูล', icon:'🔌',
+    })) return;
+    const list = $('holiday-list');
+    if (list) list.innerHTML = rmsSyncLoadingHtml();
+    const r = await post('/api/institution.php', { action:'sync_holidays' });
+    toast(r.message, r.success?'success':'error');
+    if (r.success) pages.institution();
+    else if (list) list.innerHTML = `<div class="fs-13" style="color:#EF4444;padding:12px">${r.message}</div>`;
   };
   window.openAddHoliday = () => {
     showModal(`<div class="modal-overlay"><div class="modal" style="max-width:400px">
