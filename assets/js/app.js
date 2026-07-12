@@ -1739,12 +1739,24 @@ pages.settings = async () => {
       },
       {
         key:'student', icon:'🧑‍🎓', title:'โหลดข้อมูลผู้เรียน', data:'std2018_student', btn:'โหลดผู้เรียน',
-        api:'/api/students.php', chunked:true, row:100,
+        api:'/api/students.php', chunked:true, mode:'count', row:100,
         confirm:{ title:'โหลดข้อมูลผู้เรียนจาก RMS', message:'ดึงข้อมูลผู้เรียนทั้งหมดจากระบบ RMS?\nเนื่องจากมีจำนวนมาก ระบบจะทยอยโหลดทีละท่อนจนครบ (อย่าปิดหน้านี้)', confirmText:'เริ่มโหลด', icon:'🧑‍🎓' },
         details:`<ul style="margin:0 0 0 18px;padding:0">
           <li>โหลดแบบแบ่งท่อน (batch ละ 100 รายการ) จนครบทั้งหมด</li>
           <li>upsert ตามรหัสผู้เรียน (<code>studentID</code>) — โหลดซ้ำได้</li>
           <li>เก็บชื่อ-สกุล กลุ่มเรียน ระดับชั้น สาขา สถานะ และ GPAX</li></ul>`,
+        summary:s => badge('เพิ่มใหม่',fmtN(s.added),'badge-approved') + badge('อัปเดต',fmtN(s.updated),'','background:#3B82F620;color:#3B82F6') + badge('รวม '+fmtN(s.done)+' รายการ','','badge-draft'),
+      },
+      {
+        key:'studing', icon:'📅', title:'โหลดตารางเรียน', data:'studing', btn:'โหลดตารางเรียน',
+        api:'/api/schedules.php', chunked:true, mode:'scan', row:1000,
+        confirm:{ title:'โหลดตารางเรียนจาก RMS', message:'ดึงข้อมูลตารางเรียนของภาคเรียนปัจจุบันจากระบบ RMS?\nระบบจะทยอยโหลดทีละท่อนจนครบ (อย่าปิดหน้านี้)', confirmText:'เริ่มโหลด', icon:'📅' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>โหลดตารางเรียนของ<b>ภาคเรียนที่ตั้งเป็นปัจจุบัน</b> (พารามิเตอร์ <code>semes</code> เช่น 1/2569)</li>
+          <li>โหลดแบบแบ่งท่อน (batch ละ 1,000 รายการ) จนกว่าข้อมูลจะไม่ครบ/หมด</li>
+          <li>โหลดใหม่แต่ละครั้งจะแทนที่ตารางเรียนของภาคเรียนนั้นทั้งหมด</li>
+          <li>เก็บวิชา ครูผู้สอน กลุ่มเรียน วัน-เวลา จำนวนคาบ ห้อง/อาคาร</li></ul>`,
+        summary:s => badge('รวม '+fmtN(s.done)+' รายการ','','badge-approved'),
       },
     ];
 
@@ -1825,56 +1837,63 @@ pages.settings = async () => {
           <div class="progress-track"><div class="progress-bar" style="width:${pct}%;background:#7B1F32"></div></div>
         </div>`;
     };
+    const scanProgress = (done) => `
+      <div class="mt-10">
+        <div class="fs-11 text-muted mb-4">โหลดแล้ว ${fmtN(done)} รายการ…</div>
+        <div class="progress-indet"></div>
+      </div>`;
 
     async function runChunkedTransfer(cfg) {
       if (!await confirmModal(cfg.confirm)) return;
       const btn  = $('rt-btn-' + cfg.key);
       const res  = $('rt-res-' + cfg.key);
       const prog = $('rt-prog-' + cfg.key);
-      btn.disabled = true;
-      btn.innerHTML = btnSpinner('กำลังนับ...');
-      res.innerHTML = '';
-      prog.innerHTML = `<div class="fs-11 text-muted mt-10">กำลังนับจำนวนข้อมูลในระบบ RMS…</div>`;
+      const row  = cfg.row || 100;
+      const bar  = (done) => cfg.mode === 'count' ? progressBar(done, total) : scanProgress(done);
+      let offset = 0, added = 0, updated = 0, done = 0, total = 0, failed = false;
 
-      const cRes = await post(cfg.api, { action: 'count' });
-      if (!cRes.success) {
-        btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
-        prog.innerHTML = `<div class="fs-12 mt-10" style="color:#EF4444">${cRes.message}</div>`;
-        return;
+      btn.disabled = true;
+      res.innerHTML = '';
+
+      // count mode: นับจำนวนก่อนเพื่อทำ progress bar แบบเปอร์เซ็นต์
+      if (cfg.mode === 'count') {
+        btn.innerHTML = btnSpinner('กำลังนับ...');
+        prog.innerHTML = `<div class="fs-11 text-muted mt-10">กำลังนับจำนวนข้อมูลในระบบ RMS…</div>`;
+        const cRes = await post(cfg.api, { action: 'count' });
+        if (!cRes.success) {
+          btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
+          prog.innerHTML = `<div class="fs-12 mt-10" style="color:#EF4444">${cRes.message}</div>`;
+          return;
+        }
+        total = cRes.data.total || 0;
       }
-      const total = cRes.data.total || 0;
-      const row = cfg.row || 100;
-      let offset = 0, added = 0, updated = 0, done = 0, failed = false;
 
       btn.innerHTML = btnSpinner('กำลังโหลด...');
-      prog.innerHTML = progressBar(0, total);
+      prog.innerHTML = bar(0);
 
-      while (offset < total) {
+      while (true) {
         const bRes = await post(cfg.api, { action: 'sync_batch', offset, row });
         if (!bRes.success) {
           failed = true;
-          prog.innerHTML = progressBar(done, total) +
+          prog.innerHTML = bar(done) +
             `<div class="fs-12 mt-6" style="color:#EF4444">หยุดที่ ${fmtN(done)} รายการ: ${bRes.message}</div>`;
           break;
         }
-        added   += bRes.data.added;
-        updated += bRes.data.updated;
+        added   += bRes.data.added   || 0;
+        updated += bRes.data.updated || 0;
         const fetched = bRes.data.fetched || 0;
         done   += fetched;
         offset += row;
-        prog.innerHTML = progressBar(Math.min(done, total), total);
-        if (fetched < row) break; // ครบแล้ว (ท่อนสุดท้ายน้อยกว่า row)
+        prog.innerHTML = bar(cfg.mode === 'count' ? Math.min(done, total) : done);
+        // จบเมื่อท่อนสุดท้ายได้น้อยกว่า row (ไม่ครบ/หมด) หรือครบยอดรวม (count mode)
+        if (fetched < row) break;
+        if (cfg.mode === 'count' && done >= total) break;
       }
 
       btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
       if (!failed) {
-        toast(`โหลดผู้เรียนสำเร็จ ${fmtN(done)} รายการ`, 'success');
-        prog.innerHTML = `
-          <div class="anim-fadein d-flex gap-6 mt-10" style="flex-wrap:wrap">
-            <span class="badge badge-approved">เพิ่มใหม่ ${fmtN(added)}</span>
-            <span class="badge" style="background:#3B82F620;color:#3B82F6">อัปเดต ${fmtN(updated)}</span>
-            <span class="badge badge-draft">รวม ${fmtN(done)} รายการ</span>
-          </div>`;
+        toast(`โหลดสำเร็จ ${fmtN(done)} รายการ`, 'success');
+        prog.innerHTML = `<div class="anim-fadein d-flex gap-6 mt-10" style="flex-wrap:wrap">${cfg.summary({ added, updated, done })}</div>`;
       } else {
         toast('โหลดข้อมูลไม่สำเร็จทั้งหมด', 'error');
       }
