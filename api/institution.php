@@ -80,6 +80,82 @@ if ($method === 'POST') {
         json_ok(null,'ลบวันหยุดสำเร็จ');
     }
 
+    if ($action === 'sync_student_groups') {
+        $rmsPath = '/api_connection.php?app_name=nutty&data=std2018_studentgroup';
+        $base = rtrim((string)get_setting('rms_base_url', 'http://rms.rvc.ac.th'), '/');
+        if ($base === '') json_err('ยังไม่ได้ตั้งค่า URL ของระบบ RMS');
+        $url = $base . $rmsPath;
+
+        $raw = false;
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 30,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            $raw = curl_exec($ch);
+            $err = curl_error($ch);
+            curl_close($ch);
+            if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ: ' . $err);
+        } else {
+            $ctx = stream_context_create(['http' => ['timeout' => 30]]);
+            $raw = @file_get_contents($url, false, $ctx);
+            if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ');
+        }
+
+        $groups = json_decode($raw, true);
+        if (!is_array($groups)) json_err('ข้อมูลจาก RMS ไม่อยู่ในรูปแบบ JSON ที่ถูกต้อง');
+
+        $added = 0; $updated = 0; $skipped = 0;
+
+        foreach ($groups as $g) {
+            if (!is_array($g)) continue;
+            $year = (int)($g['academicYear'] ?? 0);
+            $sem  = (int)($g['semester'] ?? 0);
+            $code = trim((string)($g['groupCode'] ?? ''));
+            if ($year <= 0 || $sem <= 0 || $code === '') { $skipped++; continue; }
+
+            $teacher = trim(($g['teacherFirstname'] ?? '') . ' ' . ($g['teacherLastname'] ?? ''));
+            $params  = [
+                trim((string)($g['grade'] ?? '')) ?: null,
+                trim((string)($g['groupName'] ?? '')) ?: null,
+                trim((string)($g['groupAbbr'] ?? '')) ?: null,
+                trim((string)($g['teacherIdcard'] ?? '')) ?: null,
+                $teacher !== '' ? $teacher : null,
+                trim((string)($g['ClassRoomID'] ?? '')) ?: null,
+            ];
+
+            $exists = DB::fetch(
+                'SELECT id FROM student_groups WHERE academic_year=? AND semester=? AND group_code=? LIMIT 1',
+                [$year, $sem, $code]
+            );
+            if ($exists) {
+                DB::exec(
+                    'UPDATE student_groups
+                     SET grade=?, group_name=?, group_abbr=?, teacher_idcard=?, teacher_name=?, classroom_id=?
+                     WHERE id=?',
+                    array_merge($params, [(int)$exists['id']])
+                );
+                $updated++;
+            } else {
+                DB::insert(
+                    'INSERT INTO student_groups
+                     (academic_year, semester, group_code, grade, group_name, group_abbr, teacher_idcard, teacher_name, classroom_id)
+                     VALUES (?,?,?,?,?,?,?,?,?)',
+                    array_merge([$year, $sem, $code], $params)
+                );
+                $added++;
+            }
+        }
+
+        json_ok(
+            ['added' => $added, 'updated' => $updated, 'skipped' => $skipped],
+            "โหลดกลุ่มผู้เรียนสำเร็จ: เพิ่ม {$added}, อัปเดต {$updated}, ข้าม {$skipped}"
+        );
+    }
+
     if ($action === 'sync_semesters') {
         $rmsPath = '/api_connection.php?app_name=nutty&data=dateedu';
         $base = rtrim((string)get_setting('rms_base_url', 'http://rms.rvc.ac.th'), '/');

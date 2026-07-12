@@ -1728,6 +1728,15 @@ pages.settings = async () => {
           <li>ข้ามรายการที่มีวันหยุดวันเดียวกันอยู่แล้ว (โหลดซ้ำได้)</li></ul>`,
         badges:d => badge('เพิ่มใหม่',d.added,'badge-approved') + badge('ซ้ำ',d.duplicated,'','background:#3B82F620;color:#3B82F6') + badge('ข้าม',d.skipped,'badge-draft'),
       },
+      {
+        key:'studentgroup', icon:'👨‍🎓', title:'โหลดกลุ่มผู้เรียน', data:'std2018_studentgroup', btn:'โหลดกลุ่มเรียน',
+        api:'/api/institution.php', body:{ action:'sync_student_groups' },
+        confirm:{ title:'โหลดกลุ่มผู้เรียนจาก RMS', message:'ดึงข้อมูลกลุ่มผู้เรียนจากระบบ RMS?\nจะสร้าง/อัปเดตกลุ่มเรียนตามข้อมูลต้นทาง (โหลดซ้ำได้)', confirmText:'โหลดข้อมูล', icon:'👨‍🎓' },
+        details:`<ul style="margin:0 0 0 18px;padding:0">
+          <li>สร้าง/อัปเดตกลุ่มเรียนตามปีการศึกษา/ภาคเรียน + รหัสกลุ่ม (<code>groupCode</code>)</li>
+          <li>เก็บระดับชั้น ชื่อกลุ่ม ชื่อย่อ และครูที่ปรึกษา</li></ul>`,
+        badges:d => badge('เพิ่มใหม่',d.added,'badge-approved') + badge('อัปเดต',d.updated,'','background:#3B82F620;color:#3B82F6') + badge('ข้าม',d.skipped,'badge-draft'),
+      },
     ];
 
     sc.innerHTML = `
