@@ -1664,7 +1664,7 @@ pages.settings = async () => {
   const renderShell = () => {
     $('page-content').innerHTML = `
       <div class="anim-fadeup">
-        <div class="d-flex gap-16" style="align-items:flex-start">
+        <div class="d-flex" style="align-items:flex-start;gap:28px">
           <div class="card" style="width:220px;flex-shrink:0;padding:8px 0">
             ${sections.map(s => `
               <div onclick="switchSettingSection('${s.id}')"
