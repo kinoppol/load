@@ -72,6 +72,71 @@ if ($method === 'POST') {
         json_ok(null,'ลบวันหยุดสำเร็จ');
     }
 
+    if ($action === 'sync_semesters') {
+        $rmsPath = '/api_connection.php?app_name=nutty&data=dateedu';
+        $base = rtrim((string)get_setting('rms_base_url', 'http://rms.rvc.ac.th'), '/');
+        if ($base === '') json_err('ยังไม่ได้ตั้งค่า URL ของระบบ RMS');
+        $url = $base . $rmsPath;
+
+        $raw = false;
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 30,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            $raw = curl_exec($ch);
+            $err = curl_error($ch);
+            curl_close($ch);
+            if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ: ' . $err);
+        } else {
+            $ctx = stream_context_create(['http' => ['timeout' => 30]]);
+            $raw = @file_get_contents($url, false, $ctx);
+            if ($raw === false) json_err('เชื่อมต่อ RMS ไม่สำเร็จ');
+        }
+
+        $rows = json_decode($raw, true);
+        if (!is_array($rows)) json_err('ข้อมูลจาก RMS ไม่อยู่ในรูปแบบ JSON ที่ถูกต้อง');
+
+        $added = 0; $updated = 0; $skipped = 0;
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $eduyear = trim((string)($row['dateedu_eduyear'] ?? ''));
+            $start   = trim((string)($row['dateedu_start'] ?? ''));
+            $end     = trim((string)($row['dateedu_end'] ?? ''));
+
+            if (!str_contains($eduyear, '/')) { $skipped++; continue; }
+            [$semNum, $year] = array_map('intval', explode('/', $eduyear, 2));
+            if ($semNum <= 0 || $year <= 0) { $skipped++; continue; }
+            if ($start === '' || $start === '0000-00-00' || $end === '' || $end === '0000-00-00') { $skipped++; continue; }
+
+            $name = "ภาคเรียนที่ {$semNum}/{$year}";
+            $exists = DB::fetch('SELECT id FROM semesters WHERE year=? AND semester=? LIMIT 1', [$year, $semNum]);
+            if ($exists) {
+                // อัปเดตวันเปิด-ปิด/ชื่อ โดยไม่แตะสถานะภาคเรียนปัจจุบัน (is_current)
+                DB::exec(
+                    'UPDATE semesters SET name=?, start_date=?, end_date=? WHERE id=?',
+                    [$name, $start, $end, (int)$exists['id']]
+                );
+                $updated++;
+            } else {
+                DB::insert(
+                    'INSERT INTO semesters (name, year, semester, start_date, end_date, is_current) VALUES (?,?,?,?,?,0)',
+                    [$name, $year, $semNum, $start, $end]
+                );
+                $added++;
+            }
+        }
+
+        json_ok(
+            ['added' => $added, 'updated' => $updated, 'skipped' => $skipped],
+            "โหลดภาคเรียนสำเร็จ: เพิ่ม {$added}, อัปเดต {$updated}, ข้าม {$skipped}"
+        );
+    }
+
     if ($action === 'sync_holidays') {
         // host เก็บใน app_settings (ใช้ร่วมกับ RMS), path เก็บใน code
         $rmsPath = '/api_connection.php?app_name=nutty&data=stopday';
