@@ -36,10 +36,6 @@ $initial    = mb_substr($user['full_name'], 0, 1);
         <div class="sb-sub">การสอนเกินภาระงาน</div>
       </div>
     </div>
-    <div class="sb-user" id="sb-user-area">
-      <div style="font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">บทบาท</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.8);font-weight:600"><?= htmlspecialchars($roleLabel) ?></div>
-    </div>
     <nav class="sb-nav" id="nav-menu"></nav>
   </aside>
 
