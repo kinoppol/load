@@ -1895,7 +1895,10 @@ pages.settings = async () => {
       </div>
 
       <div class="card">
-        <div class="card-header"><span>⬇️ โอนข้อมูลจาก RMS</span></div>
+        <div class="card-header"><span>⬇️ โอนข้อมูลจาก RMS</span>
+          <button class="btn btn-primary btn-sm" id="rt-all-btn" onclick="runAllTransfers()">⬇️ โหลดทั้งหมดตามลำดับ</button>
+        </div>
+        <div id="rt-all-status" style="padding:10px 18px 0"></div>
         <div class="card-body" style="padding:4px 0">
           ${transfers.map((t,i) => `
             <div style="padding:14px 18px;${i<transfers.length-1?'border-bottom:1px solid var(--border)':''}">
@@ -1929,23 +1932,52 @@ pages.settings = async () => {
     const btnSpinner = (label) =>
       `<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>${label}`;
 
-    window.runRmsTransfer = async (key) => {
-      const cfg = transfers.find(t => t.key === key);
-      if (!cfg) return;
-      if (cfg.chunked) return runChunkedTransfer(cfg);
-      if (!await confirmModal(cfg.confirm)) return;
-      const btn = $('rt-btn-' + key);
-      const res = $('rt-res-' + key);
+    // รันรายการเดียว (แบบยิงครั้งเดียว) — ask=false เมื่อเรียกจาก "โหลดทั้งหมด"
+    async function runSingleTransfer(cfg, ask = true) {
+      if (ask && !await confirmModal(cfg.confirm)) return false;
+      const btn = $('rt-btn-' + cfg.key);
+      const res = $('rt-res-' + cfg.key);
       btn.disabled = true;
       btn.innerHTML = btnSpinner('กำลังทำงาน...');
       res.innerHTML = `<span class="fs-11 text-muted">กำลังเชื่อมต่อ RMS…</span>`;
       const r = await post(cfg.api, cfg.body);
       btn.disabled = false;
       btn.textContent = '⬇️ ' + cfg.btn;
-      toast(r.message, r.success ? 'success' : 'error');
+      if (ask) toast(r.message, r.success ? 'success' : 'error');
       res.innerHTML = r.success
         ? `<div class="anim-fadein d-flex gap-6" style="flex-wrap:wrap;justify-content:flex-end">${cfg.badges(r.data)}</div>`
         : `<div class="fs-12" style="color:#EF4444">${r.message}</div>`;
+      return r.success;
+    }
+
+    window.runRmsTransfer = async (key) => {
+      const cfg = transfers.find(t => t.key === key);
+      if (!cfg) return;
+      if (cfg.chunked) return runChunkedTransfer(cfg, true);
+      return runSingleTransfer(cfg, true);
+    };
+
+    window.runAllTransfers = async () => {
+      if (!await confirmModal({
+        title:'โหลดข้อมูลทั้งหมดจาก RMS',
+        message:'โหลดข้อมูลจาก RMS ทุกรายการเรียงตามลำดับ?\nอาจใช้เวลาสักครู่ กรุณาอย่าปิดหน้านี้',
+        confirmText:'เริ่มโหลดทั้งหมด', icon:'⬇️',
+      })) return;
+      const allBtn = $('rt-all-btn');
+      const status = $('rt-all-status');
+      allBtn.disabled = true;
+      allBtn.innerHTML = btnSpinner('กำลังโหลด...');
+      let ok = 0, fail = 0;
+      for (let i = 0; i < transfers.length; i++) {
+        const cfg = transfers[i];
+        status.innerHTML = `<div class="d-flex align-center gap-8"><span class="spinner" style="width:15px;height:15px;border-width:2px"></span><span class="fs-12 fw-600" style="color:#7B1F32">กำลังโหลด (${i+1}/${transfers.length}): ${cfg.title}…</span></div>`;
+        const success = cfg.chunked ? await runChunkedTransfer(cfg, false) : await runSingleTransfer(cfg, false);
+        success ? ok++ : fail++;
+      }
+      allBtn.disabled = false;
+      allBtn.textContent = '⬇️ โหลดทั้งหมดตามลำดับ';
+      status.innerHTML = `<span class="badge ${fail?'badge-rejected':'badge-approved'}">เสร็จสิ้น: สำเร็จ ${ok}/${transfers.length}${fail?' · ล้มเหลว '+fail:''}</span>`;
+      toast(fail ? `โหลดเสร็จ มีล้มเหลว ${fail} รายการ` : 'โหลดข้อมูลทั้งหมดสำเร็จ', fail ? 'error' : 'success');
     };
 
     const progressBar = (done, total) => {
@@ -1964,8 +1996,8 @@ pages.settings = async () => {
         <div class="progress-indet"></div>
       </div>`;
 
-    async function runChunkedTransfer(cfg) {
-      if (!await confirmModal(cfg.confirm)) return;
+    async function runChunkedTransfer(cfg, ask = true) {
+      if (ask && !await confirmModal(cfg.confirm)) return false;
       const btn  = $('rt-btn-' + cfg.key);
       const res  = $('rt-res-' + cfg.key);
       const prog = $('rt-prog-' + cfg.key);
@@ -1984,7 +2016,7 @@ pages.settings = async () => {
         if (!cRes.success) {
           btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
           prog.innerHTML = `<div class="fs-12 mt-10" style="color:#EF4444">${cRes.message}</div>`;
-          return;
+          return false;
         }
         total = cRes.data.total || 0;
       }
@@ -2013,11 +2045,12 @@ pages.settings = async () => {
 
       btn.disabled = false; btn.textContent = '⬇️ ' + cfg.btn;
       if (!failed) {
-        toast(`โหลดสำเร็จ ${fmtN(done)} รายการ`, 'success');
+        if (ask) toast(`โหลดสำเร็จ ${fmtN(done)} รายการ`, 'success');
         prog.innerHTML = `<div class="anim-fadein d-flex gap-6 mt-10" style="flex-wrap:wrap">${cfg.summary({ added, updated, done })}</div>`;
       } else {
-        toast('โหลดข้อมูลไม่สำเร็จทั้งหมด', 'error');
+        if (ask) toast('โหลดข้อมูลไม่สำเร็จทั้งหมด', 'error');
       }
+      return !failed;
     }
   };
 
