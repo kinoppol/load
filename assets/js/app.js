@@ -231,6 +231,15 @@ $('mark-all-read').addEventListener('click', async () => {
 });
 document.addEventListener('click', e => {
   if (!$('notif-root').contains(e.target)) $('notif-dropdown').style.display = 'none';
+  if (!$('avatar-root').contains(e.target)) $('avatar-dropdown').style.display = 'none';
+});
+
+/* ── Avatar menu ──────────────────────────────────── */
+$('avatar-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const dd = $('avatar-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  $('notif-dropdown').style.display = 'none';
 });
 
 /* ══════════════════════════════════════════════════

@@ -37,10 +37,6 @@ $initial    = mb_substr($user['full_name'], 0, 1);
       </div>
     </div>
     <div class="sb-user" id="sb-user-area">
-      <div class="d-flex align-center justify-between mb-8">
-        <div class="sb-username"><?= htmlspecialchars($user['full_name']) ?></div>
-        <a href="<?= BASE_URL ?>/logout.php" class="sb-logout">ออก</a>
-      </div>
       <div style="font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">บทบาท</div>
       <div style="font-size:12px;color:rgba(255,255,255,.8);font-weight:600"><?= htmlspecialchars($roleLabel) ?></div>
     </div>
@@ -76,7 +72,22 @@ $initial    = mb_substr($user['full_name'], 0, 1);
             <div style="padding:10px 16px;text-align:center;font-size:12px;color:#7B1F32;cursor:pointer;font-weight:600;border-top:1px solid var(--border)">ดูทั้งหมด →</div>
           </div>
         </div>
-        <div class="avatar"><?= htmlspecialchars($initial) ?></div>
+        <!-- Avatar menu -->
+        <div style="position:relative" id="avatar-root">
+          <div class="avatar" id="avatar-btn" style="cursor:pointer"><?= htmlspecialchars($initial) ?></div>
+          <div class="dropdown" id="avatar-dropdown" style="display:none;right:0;top:46px;width:230px">
+            <div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--border)">
+              <div class="avatar" style="flex-shrink:0"><?= htmlspecialchars($initial) ?></div>
+              <div style="min-width:0">
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= htmlspecialchars($user['full_name']) ?></div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px"><?= htmlspecialchars($roleLabel) ?></div>
+              </div>
+            </div>
+            <a href="<?= BASE_URL ?>/logout.php" id="avatar-logout" style="display:flex;align-items:center;gap:9px;padding:12px 16px;color:#EF4444;font-size:13px;font-weight:600;text-decoration:none">
+              <span style="font-size:15px">🚪</span> ออกจากระบบ
+            </a>
+          </div>
+        </div>
       </div>
     </header>
 
