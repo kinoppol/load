@@ -1693,14 +1693,24 @@ pages.settings = async () => {
     if (!sc) return;
 
     const tabs = {
-      students:  { label:'ผู้เรียน', icon:'🧑‍🎓', cols:[
-        { k:'student_code', h:'รหัสนักศึกษา' },
-        { k:'_name', h:'ชื่อ-สกุล', r:x=>`${x.firstname||''} ${x.surname||''}`.trim()||'-' },
-        { k:'group_name', h:'กลุ่ม' },
-        { k:'grade_name', h:'ระดับชั้น' },
-        { k:'major_name', h:'สาขา' },
-        { k:'status_name', h:'สถานะ', c:1 },
-        { k:'gpax', h:'GPAX', c:1, r:x=>x.gpax??'-' },
+      personnel: { label:'บุคลากร', icon:'👥', cols:[
+        { k:'people_id', h:'รหัสบุคลากร' },
+        { k:'full_name', h:'ชื่อ-สกุล' },
+        { k:'username', h:'ชื่อผู้ใช้' },
+        { k:'email', h:'อีเมล' },
+        { k:'_st', h:'สถานะ', c:1, r:x=> x.is_active==1?'<span class="badge badge-approved">ใช้งาน</span>':'<span class="badge badge-rejected">ไม่ใช้งาน</span>' },
+      ]},
+      semesters: { label:'ภาคเรียน', icon:'📆', cols:[
+        { k:'name', h:'ภาคเรียน' },
+        { k:'_edu', h:'ปี/ภาค', c:1, r:x=>`${x.semester}/${x.year}` },
+        { k:'start_date', h:'วันเปิด', c:1, r:x=>thaiDate(x.start_date) },
+        { k:'end_date', h:'วันปิด', c:1, r:x=>thaiDate(x.end_date) },
+        { k:'_cur', h:'ปัจจุบัน', c:1, r:x=> x.is_current==1?'<span class="badge badge-approved">ปัจจุบัน</span>':'-' },
+      ]},
+      holidays:  { label:'วันหยุด', icon:'🎌', cols:[
+        { k:'name', h:'ชื่อวันหยุด' },
+        { k:'holiday_date', h:'วันที่', c:1, r:x=>thaiDate(x.holiday_date) },
+        { k:'sem_name', h:'ภาคเรียน' },
       ]},
       groups:    { label:'กลุ่มเรียน', icon:'👨‍🎓', cols:[
         { k:'group_code', h:'รหัสกลุ่ม' },
@@ -1709,6 +1719,15 @@ pages.settings = async () => {
         { k:'grade', h:'ระดับชั้น' },
         { k:'_edu', h:'ปี/ภาค', c:1, r:x=>`${x.semester}/${x.academic_year}` },
         { k:'teacher_name', h:'ครูที่ปรึกษา' },
+      ]},
+      students:  { label:'ผู้เรียน', icon:'🧑‍🎓', cols:[
+        { k:'student_code', h:'รหัสนักศึกษา' },
+        { k:'_name', h:'ชื่อ-สกุล', r:x=>`${x.firstname||''} ${x.surname||''}`.trim()||'-' },
+        { k:'group_name', h:'กลุ่ม' },
+        { k:'grade_name', h:'ระดับชั้น' },
+        { k:'major_name', h:'สาขา' },
+        { k:'status_name', h:'สถานะ', c:1 },
+        { k:'gpax', h:'GPAX', c:1, r:x=>x.gpax??'-' },
       ]},
       schedules: { label:'ตารางเรียน', icon:'📅', cols:[
         { k:'subject_id', h:'รหัสวิชา' },
@@ -1721,7 +1740,7 @@ pages.settings = async () => {
       ]},
     };
 
-    let active = 'students', q = '', page = 1, counts = {};
+    let active = 'personnel', q = '', page = 1, counts = {};
     const per = 20;
 
     sc.innerHTML = `
