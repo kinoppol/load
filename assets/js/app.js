@@ -1659,6 +1659,7 @@ pages.settings = async () => {
   const sections = [
     { id: 'makeup_reasons', icon: '🔖', label: 'เหตุผลการสอนชดเชย' },
     { id: 'integration',    icon: '🔌', label: 'การเชื่อมต่อ RMS' },
+    { id: 'rms_data',       icon: '🗂️', label: 'ตรวจสอบข้อมูล RMS' },
   ];
 
   const renderShell = () => {
@@ -1684,6 +1685,98 @@ pages.settings = async () => {
   const loadSection = async (section) => {
     if (section === 'makeup_reasons') await loadReasonsSection();
     if (section === 'integration')    await loadIntegrationSection();
+    if (section === 'rms_data')       await loadRmsDataSection();
+  };
+
+  const loadRmsDataSection = async () => {
+    const sc = document.getElementById('settings-content');
+    if (!sc) return;
+
+    const tabs = {
+      students:  { label:'ผู้เรียน', icon:'🧑‍🎓', cols:[
+        { k:'student_code', h:'รหัสนักศึกษา' },
+        { k:'_name', h:'ชื่อ-สกุล', r:x=>`${x.firstname||''} ${x.surname||''}`.trim()||'-' },
+        { k:'group_name', h:'กลุ่ม' },
+        { k:'grade_name', h:'ระดับชั้น' },
+        { k:'major_name', h:'สาขา' },
+        { k:'status_name', h:'สถานะ', c:1 },
+        { k:'gpax', h:'GPAX', c:1, r:x=>x.gpax??'-' },
+      ]},
+      groups:    { label:'กลุ่มเรียน', icon:'👨‍🎓', cols:[
+        { k:'group_code', h:'รหัสกลุ่ม' },
+        { k:'group_name', h:'ชื่อกลุ่ม' },
+        { k:'group_abbr', h:'ชื่อย่อ' },
+        { k:'grade', h:'ระดับชั้น' },
+        { k:'_edu', h:'ปี/ภาค', c:1, r:x=>`${x.semester}/${x.academic_year}` },
+        { k:'teacher_name', h:'ครูที่ปรึกษา' },
+      ]},
+      schedules: { label:'ตารางเรียน', icon:'📅', cols:[
+        { k:'subject_id', h:'รหัสวิชา' },
+        { k:'subject_name', h:'ชื่อวิชา' },
+        { k:'teacher_name', h:'ครูผู้สอน' },
+        { k:'day_name', h:'วัน', c:1 },
+        { k:'time_range', h:'เวลา', c:1 },
+        { k:'periods', h:'คาบ', c:1, r:x=>x.periods??'-' },
+        { k:'room', h:'ห้อง', c:1 },
+      ]},
+    };
+
+    let active = 'students', q = '', page = 1, counts = {};
+    const per = 20;
+
+    sc.innerHTML = `
+      <div class="card">
+        <div class="card-header"><span>🗂️ ตรวจสอบข้อมูลที่โหลดจาก RMS</span></div>
+        <div style="padding:14px 18px 0">
+          <div class="tabs" id="rd-tabs" style="margin-bottom:14px"></div>
+          <div class="d-flex gap-10 mb-14 align-center" style="flex-wrap:wrap">
+            <input class="form-control" id="rd-search" placeholder="🔍 ค้นหา" style="width:280px" oninput="rdSearch(this.value)">
+            <div class="flex-1"></div>
+            <div class="fs-12 text-muted" id="rd-count"></div>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table><thead id="rd-head"></thead><tbody id="rd-body"></tbody></table></div>
+        <div id="rd-pager" class="d-flex align-center justify-between" style="padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap;gap:10px"></div>
+      </div>`;
+
+    const renderTabs = () => {
+      $('rd-tabs').innerHTML = Object.entries(tabs).map(([k,t]) =>
+        `<div class="tab ${active===k?'active':''}" onclick="rdTab('${k}')">${t.icon} ${t.label} <span class="fs-11 text-muted">${fmtN(counts[k]??0)}</span></div>`
+      ).join('');
+    };
+
+    const load = async () => {
+      const r = await api(`/api/rms_data.php?resource=${active}&page=${page}&per=${per}&q=${encodeURIComponent(q)}`);
+      if (!r.success) { toast(r.message,'error'); return; }
+      counts = r.data.counts || counts;
+      renderTabs();
+
+      const cols = tabs[active].cols;
+      const rows = r.data.rows || [];
+      const total = r.data.total || 0;
+      const totalPages = Math.max(1, Math.ceil(total / per));
+
+      $('rd-count').textContent = `พบ ${fmtN(total)} รายการ`;
+      $('rd-head').innerHTML = `<tr>${cols.map(c=>`<th ${c.c?'class="text-center"':''}>${c.h}</th>`).join('')}</tr>`;
+      $('rd-body').innerHTML = rows.map(x=>`<tr>${cols.map(c=>{
+        const v = c.r ? c.r(x) : (x[c.k] ?? '-');
+        return `<td ${c.c?'class="text-center"':''}>${v===''||v==null?'-':v}</td>`;
+      }).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" style="text-align:center;padding:40px;color:var(--muted)">ไม่พบข้อมูล</td></tr>`;
+
+      const from = total ? (page-1)*per+1 : 0;
+      const to = Math.min(page*per, total);
+      $('rd-pager').innerHTML = `
+        <div class="fs-12 text-muted">แสดง ${from}–${to} จาก ${fmtN(total)} · หน้า ${page}/${totalPages}</div>
+        <div class="d-flex gap-6">
+          <button class="btn btn-ghost btn-sm" ${page<=1?'disabled':''} onclick="rdPage(${page-1})">← ก่อนหน้า</button>
+          <button class="btn btn-ghost btn-sm" ${page>=totalPages?'disabled':''} onclick="rdPage(${page+1})">ถัดไป →</button>
+        </div>`;
+    };
+
+    window.rdTab = (k) => { active = k; page = 1; q = ''; const s=$('rd-search'); if(s) s.value=''; load(); };
+    window.rdSearch = (v) => { q = v; page = 1; load(); };
+    window.rdPage = (p) => { page = p; load(); };
+    await load();
   };
 
   const loadIntegrationSection = async () => {
