@@ -45,13 +45,6 @@ $initial    = mb_substr($user['full_name'], 0, 1);
       <div style="font-size:12px;color:rgba(255,255,255,.8);font-weight:600"><?= htmlspecialchars($roleLabel) ?></div>
     </div>
     <nav class="sb-nav" id="nav-menu"></nav>
-    <div class="sb-bottom">
-      <div class="theme-switcher" id="theme-switcher">
-        <div class="theme-btn active" data-theme="light" title="สว่าง">☀️<div class="theme-label" style="font-size:9px;margin-top:1px">สว่าง</div></div>
-        <div class="theme-btn" data-theme="dark"  title="มืด">🌙<div class="theme-label" style="font-size:9px;margin-top:1px">มืด</div></div>
-        <div class="theme-btn" data-theme="system" title="ระบบ">💻<div class="theme-label" style="font-size:9px;margin-top:1px">ระบบ</div></div>
-      </div>
-    </div>
   </aside>
 
   <!-- ══ MAIN ══ -->
@@ -65,6 +58,12 @@ $initial    = mb_substr($user['full_name'], 0, 1);
       </div>
       <div class="d-flex align-center gap-10">
         <span class="role-badge"><?= htmlspecialchars($roleLabel) ?></span>
+        <!-- Theme switcher -->
+        <div class="theme-switcher topbar-theme" id="theme-switcher">
+          <div class="theme-btn active" data-theme="light" title="สว่าง">☀️</div>
+          <div class="theme-btn" data-theme="dark"  title="มืด">🌙</div>
+          <div class="theme-btn" data-theme="system" title="ตามระบบ">💻</div>
+        </div>
         <!-- Notification -->
         <div style="position:relative" id="notif-root">
           <div class="notif-btn" id="notif-btn">🔔<div class="notif-dot" id="notif-dot" style="display:none"></div></div>
