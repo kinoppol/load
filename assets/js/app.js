@@ -1825,14 +1825,11 @@ pages.teaching = async () => {
     renderView();
   };
   window.tsPrint = () => {
-    // สลับหน้ากระดาษเป็นแนวนอนเฉพาะการพิมพ์ครั้งนี้ แล้วเอาออกหลังพิมพ์เสร็จ
+    // ปรับตารางให้พอดีหน้ากระดาษเฉพาะตอนพิมพ์ (แนวนอนกำหนดไว้ที่ @page ใน CSS แล้ว)
     const s = document.createElement('style');
     s.textContent = `@media print{
-      @page{size:A4 landscape;margin:8mm}
-      .tbl-wrap{overflow:visible!important}
       .ts-grid{min-width:0!important;width:100%!important;font-size:10px}
-      .ts-grid tbody td{height:56px}
-      #content{padding:0!important}
+      .ts-grid tbody td{height:52px}
     }`;
     document.head.appendChild(s);
     const cleanup = () => { s.remove(); window.removeEventListener('afterprint', cleanup); };

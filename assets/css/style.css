@@ -182,11 +182,12 @@ canvas{max-width:100%}
 
 /* ── Print ───────────────────────────────────────── */
 @media print{
-  @page{size:A4 portrait;margin:12mm 14mm}
+  @page{size:A4 landscape;margin:8mm 10mm}
   body{overflow:visible!important}
   #sidebar,#topbar,[data-noprint]{display:none!important}
   #content{padding:0!important;background:#fff!important}
   .print-doc{display:block!important}
+  .tbl-wrap{overflow:visible!important}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 .print-doc{display:none}
