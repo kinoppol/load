@@ -1675,6 +1675,8 @@ pages.teaching = async () => {
     if (!g) return code;
     return (g.abbr || code) + (g.count ? ` (${g.count})` : '');
   };
+  // ตัด prefix ปี (เช่น 2567-) ออกจากรหัสวิชาให้กระชับ
+  const subjCode = (id) => (id || '').replace(/^\d{4}-/, '') || '-';
 
   $('page-content').innerHTML = `
     <div class="anim-fadeup">
@@ -1730,7 +1732,7 @@ pages.teaching = async () => {
         if (starts[col]){
           const {items,span}=starts[col]; const cs=Math.min(span, NPERIOD-col+1); skip=cs-1;
           tds += `<td colspan="${cs}" class="ts-cell">${items.map(x=>`
-            <div class="ts-code">${x.subject_id||''}</div>
+            <div class="ts-code">${subjCode(x.subject_id)}</div>
             <div>${x.room||''}</div>
             ${x.student_group_id&&x.student_group_id!=='00000000'?`<div class="fs-11 text-muted">${groupLabel(x.student_group_id)}</div>`:''}
           `).join('<hr class="ts-sep">')}</td>`;
@@ -1755,7 +1757,7 @@ pages.teaching = async () => {
           <tbody>
             ${byDay[d].sort((a,b)=>(a.time_range||'').localeCompare(b.time_range||'')).map(x=>`<tr>
               <td class="text-center fs-12 fw-600">${x.time_range||'-'}</td>
-              <td><div class="fw-600 fs-13">${x.subject_name||'-'}</div><div class="fs-11 text-muted">${x.subject_id||''}</div></td>
+              <td><div class="fw-600 fs-13">${x.subject_name||'-'}</div><div class="fs-11 text-muted">${subjCode(x.subject_id)}</div></td>
               <td class="fs-12">${x.student_group_id||'-'}</td>
               <td class="text-center fw-700 text-accent">${x.periods??'-'}</td>
               <td class="text-center fs-12">${x.room||'-'}${x.building?`<div class="fs-11 text-muted">${x.building}</div>`:''}</td>
@@ -1789,7 +1791,7 @@ pages.teaching = async () => {
           <div class="tbl-wrap"><table>
             <thead><tr><th>รหัสวิชา</th><th>ชื่อรายวิชา</th><th class="text-center">คาบ</th><th>กลุ่ม</th></tr></thead>
             <tbody>${subjects.map(s=>`<tr>
-              <td class="fs-12 fw-600">${s.id||'-'}</td>
+              <td class="fs-12 fw-600">${subjCode(s.id)}</td>
               <td class="fs-12">${s.name||'-'}</td>
               <td class="text-center fw-700 text-accent">${s.periods}</td>
               <td class="fs-11 text-muted">${[...s.groups].map(groupLabel).join(', ')||'-'}</td>
