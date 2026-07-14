@@ -1653,9 +1653,14 @@ pages.institution = async () => {
 pages.teaching = async () => {
   const dayOrder = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','พฤหัส','ศุกร์','เสาร์','อาทิตย์'];
   const dayRank = d => { const i = dayOrder.indexOf((d||'').trim()); return i < 0 ? 99 : i; };
+  const NPERIOD = 12; // คาบ 1..12 = 08:00-20:00, คอลัมน์ 0 = ก่อนเข้าเรียน (07:40-08:00)
 
-  const semR = await api('/api/schedules.php?list=semesters');
+  const [semR, instR] = await Promise.all([
+    api('/api/schedules.php?list=semesters'),
+    api('/api/institution.php'),
+  ]);
   const semesters = semR.data?.semesters || [];
+  const schoolName = instR.data?.institution?.school_name || '';
 
   if (!semesters.length) {
     $('page-content').innerHTML = `<div class="card card-body anim-fadeup text-muted" style="text-align:center;padding:50px">
@@ -1664,8 +1669,7 @@ pages.teaching = async () => {
   }
 
   let curSemes = semesters[0].semes;
-  let teachers = [];
-  let curTeacher = '';
+  let teachers = [], curTeacher = '', rows = [], view = 'grid';
 
   $('page-content').innerHTML = `
     <div class="anim-fadeup">
@@ -1676,9 +1680,128 @@ pages.teaching = async () => {
         </select>
         <span class="fw-600 fs-13 text-muted">ครูผู้สอน:</span>
         <select class="form-control" id="ts-teacher" style="min-width:240px" onchange="tsTeacher(this.value)"></select>
+        <div class="flex-1"></div>
+        <div class="tabs" style="margin:0">
+          <div class="tab active" id="ts-tab-grid" onclick="tsView('grid')">🗓️ ตารางรายสัปดาห์</div>
+          <div class="tab" id="ts-tab-list" onclick="tsView('list')">📋 รายการตามวัน</div>
+        </div>
       </div>
       <div id="ts-body"></div>
     </div>`;
+
+  // แปลงช่วงเวลา -> คอลัมน์เริ่ม/ช่วงกว้าง (1 คาบ = 1 ชั่วโมง เริ่ม 08:00)
+  const posOf = (timeRange) => {
+    const m = (timeRange||'').match(/(\d{1,2})[.:](\d{2})\D+(\d{1,2})[.:](\d{2})/);
+    let s = 8, e = 10;
+    if (m) { s = +m[1] + (+m[2])/60; e = +m[3] + (+m[4])/60; }
+    let col = Math.max(0, Math.floor(s) - 7);
+    let endCol = Math.min(NPERIOD, Math.ceil(e) - 8);
+    if (endCol < col) endCol = col;
+    return { col, span: endCol - col + 1 };
+  };
+
+  const renderGrid = () => {
+    // วันที่จะแสดง: จันทร์-ศุกร์ เสมอ + เสาร์/อาทิตย์ ถ้ามีข้อมูล
+    const present = new Set(rows.map(r=>(r.day_name||'').trim()));
+    const days = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์'];
+    ['เสาร์','อาทิตย์'].forEach(d=>{ if(present.has(d)) days.push(d); });
+    // จับคู่ชื่อวันในข้อมูล (พฤหัส/พฤหัสบดี) เข้ากับแถว
+    const dayRows = {};
+    rows.forEach(x=>{ let d=(x.day_name||'').trim(); if(d==='พฤหัส')d='พฤหัสบดี'; (dayRows[d]=dayRows[d]||[]).push(x); });
+
+    const head = `<tr><th class="ts-day">วัน \\ คาบ</th>${Array.from({length:NPERIOD},(_,i)=>{
+      const p=i+1; return `<th>${p}<div class="fs-11" style="font-weight:400;color:var(--muted)">${String(7+p).padStart(2,'0')}:00</div></th>`;
+    }).join('')}</tr>`;
+
+    const bodyRows = days.map(d=>{
+      const list = dayRows[d] || [];
+      const starts = {};
+      list.forEach(c=>{ const {col,span}=posOf(c.time_range); if(col<1)return; // 0 = ก่อนเข้าเรียน ข้าม
+        const k=col; if(!starts[k]) starts[k]={items:[],span}; starts[k].items.push(c); starts[k].span=Math.max(starts[k].span,span); });
+      let tds=''; let skip=0;
+      for (let col=1; col<=NPERIOD; col++){
+        if (skip>0){ skip--; continue; }
+        if (starts[col]){
+          const {items,span}=starts[col]; const cs=Math.min(span, NPERIOD-col+1); skip=cs-1;
+          tds += `<td colspan="${cs}" class="ts-cell">${items.map(x=>`
+            <div class="ts-code">${x.subject_id||''}</div>
+            <div>${x.room||''}</div>
+            ${x.student_group_id&&x.student_group_id!=='00000000'?`<div class="fs-11 text-muted">${x.student_group_id}</div>`:''}
+          `).join('<hr class="ts-sep">')}</td>`;
+        } else { tds += `<td></td>`; }
+      }
+      return `<tr><td class="ts-day">${d}</td>${tds}</tr>`;
+    }).join('');
+
+    return `<div class="tbl-wrap"><table class="ts-grid"><thead>${head}</thead><tbody>${bodyRows}</tbody></table></div>`;
+  };
+
+  const renderList = () => {
+    const byDay = {};
+    rows.forEach(x=>{ const d=(x.day_name||'ไม่ระบุ').trim(); (byDay[d]=byDay[d]||[]).push(x); });
+    const days = Object.keys(byDay).sort((a,b)=>dayRank(a)-dayRank(b));
+    return days.length ? days.map(d=>`
+      <div class="card mb-14">
+        <div class="card-header"><span>📆 ${d}</span><span class="fs-11 text-muted">${byDay[d].length} วิชา</span></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th class="text-center">เวลา</th><th>วิชา</th><th>กลุ่ม</th><th class="text-center">คาบ</th><th class="text-center">ห้อง</th></tr></thead>
+          <tbody>
+            ${byDay[d].sort((a,b)=>(a.time_range||'').localeCompare(b.time_range||'')).map(x=>`<tr>
+              <td class="text-center fs-12 fw-600">${x.time_range||'-'}</td>
+              <td><div class="fw-600 fs-13">${x.subject_name||'-'}</div><div class="fs-11 text-muted">${x.subject_id||''}</div></td>
+              <td class="fs-12">${x.student_group_id||'-'}</td>
+              <td class="text-center fw-700 text-accent">${x.periods??'-'}</td>
+              <td class="text-center fs-12">${x.room||'-'}${x.building?`<div class="fs-11 text-muted">${x.building}</div>`:''}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>`).join('') : `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบตารางสอน</div>`;
+  };
+
+  const renderView = () => {
+    const body = $('ts-body');
+    const tName = teachers.find(t=>String(t.teacher_id)===String(curTeacher))?.teacher_name || '';
+    const totalPeriods = rows.reduce((a,x)=>a+(+x.periods||0),0);
+
+    // สรุปรายวิชา
+    const sm = {};
+    rows.forEach(x=>{ const k=(x.subject_id||'')+'|'+(x.subject_name||''); if(!sm[k])sm[k]={id:x.subject_id,name:x.subject_name,periods:0,groups:new Set()}; sm[k].periods+=(+x.periods||0); if(x.student_group_id&&x.student_group_id!=='00000000')sm[k].groups.add(x.student_group_id); });
+    const subjects = Object.values(sm);
+
+    const header = `
+      <div class="card mb-16"><div class="card-body" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+        <div style="min-width:220px;flex:1">
+          <div class="fw-700" style="font-size:15px">${schoolName||'ตารางสอน'}</div>
+          <div class="fs-13" style="margin-top:6px;line-height:1.9">
+            <div><span class="text-muted">ภาคเรียน:</span> <b>${curSemes}</b></div>
+            <div><span class="text-muted">ผู้สอน:</span> <b>${tName||'-'}</b></div>
+            <div><span class="text-muted">รวม:</span> <b>${fmtN(subjects.length)}</b> วิชา · <b class="text-accent">${fmtN(totalPeriods)}</b> คาบ/สัปดาห์</div>
+          </div>
+        </div>
+        <div style="flex:2;min-width:280px">
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>รหัสวิชา</th><th>ชื่อรายวิชา</th><th class="text-center">คาบ</th><th>กลุ่ม</th></tr></thead>
+            <tbody>${subjects.map(s=>`<tr>
+              <td class="fs-12 fw-600">${s.id||'-'}</td>
+              <td class="fs-12">${s.name||'-'}</td>
+              <td class="text-center fw-700 text-accent">${s.periods}</td>
+              <td class="fs-11 text-muted">${[...s.groups].join(', ')||'-'}</td>
+            </tr>`).join('')||`<tr><td colspan="4" class="text-center text-muted" style="padding:20px">ไม่มีข้อมูล</td></tr>`}</tbody>
+          </table></div>
+        </div>
+      </div></div>`;
+
+    body.innerHTML = header + (view==='grid' ? renderGrid() : renderList());
+  };
+
+  const loadSchedule = async () => {
+    const body = $('ts-body');
+    if (!curTeacher) { body.innerHTML = `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบข้อมูล</div>`; return; }
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">⏳ กำลังโหลด...</div>`;
+    const r = await api(`/api/schedules.php?semes=${encodeURIComponent(curSemes)}&teacher_id=${encodeURIComponent(curTeacher)}`);
+    rows = r.data?.rows || [];
+    renderView();
+  };
 
   const loadTeachers = async () => {
     const r = await api(`/api/schedules.php?list=teachers&semes=${encodeURIComponent(curSemes)}`);
@@ -1691,49 +1814,14 @@ pages.teaching = async () => {
     await loadSchedule();
   };
 
-  const loadSchedule = async () => {
-    const body = $('ts-body');
-    if (!curTeacher) { body.innerHTML = `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบข้อมูล</div>`; return; }
-    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">⏳ กำลังโหลด...</div>`;
-    const r = await api(`/api/schedules.php?semes=${encodeURIComponent(curSemes)}&teacher_id=${encodeURIComponent(curTeacher)}`);
-    const rows = r.data?.rows || [];
-    const tName = teachers.find(t=>String(t.teacher_id)===String(curTeacher))?.teacher_name || '';
-    const totalPeriods = r.data?.total_periods || 0;
-
-    // จัดกลุ่มตามวัน
-    const byDay = {};
-    rows.forEach(x=>{ const d=(x.day_name||'ไม่ระบุ').trim(); (byDay[d]=byDay[d]||[]).push(x); });
-    const days = Object.keys(byDay).sort((a,b)=>dayRank(a)-dayRank(b));
-
-    body.innerHTML = `
-      <div class="grid-3 mb-18">
-        <div class="stat-card"><div class="stat-label">ครูผู้สอน 👨‍🏫</div><div class="stat-value" style="font-size:18px">${tName}</div></div>
-        <div class="stat-card"><div class="stat-label">จำนวนวิชา 📚</div><div class="stat-value">${fmtN(rows.length)} วิชา</div></div>
-        <div class="stat-card"><div class="stat-label">คาบรวม/สัปดาห์ ⏱️</div><div class="stat-value text-accent">${fmtN(totalPeriods)} คาบ</div></div>
-      </div>
-      ${days.length ? days.map(d=>`
-        <div class="card mb-14">
-          <div class="card-header"><span>📆 ${d}</span><span class="fs-11 text-muted">${byDay[d].length} วิชา</span></div>
-          <div class="tbl-wrap"><table>
-            <thead><tr>
-              <th class="text-center">เวลา</th><th>วิชา</th><th>กลุ่ม</th>
-              <th class="text-center">คาบ</th><th class="text-center">ห้อง</th>
-            </tr></thead>
-            <tbody>
-              ${byDay[d].sort((a,b)=>(a.time_range||'').localeCompare(b.time_range||'')).map(x=>`<tr>
-                <td class="text-center fs-12 fw-600">${x.time_range||'-'}</td>
-                <td><div class="fw-600 fs-13">${x.subject_name||'-'}</div><div class="fs-11 text-muted">${x.subject_id||''}</div></td>
-                <td class="fs-12">${x.student_group_id||'-'}</td>
-                <td class="text-center fw-700 text-accent">${x.periods??'-'}</td>
-                <td class="text-center fs-12">${x.room||'-'}${x.building?`<div class="fs-11 text-muted">${x.building}</div>`:''}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table></div>
-        </div>`).join('') : `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบตารางสอน</div>`}`;
-  };
-
   window.tsSemes = async (v) => { curSemes = v; await loadTeachers(); };
   window.tsTeacher = async (v) => { curTeacher = v; await loadSchedule(); };
+  window.tsView = (v) => {
+    view = v;
+    $('ts-tab-grid').classList.toggle('active', v==='grid');
+    $('ts-tab-list').classList.toggle('active', v==='list');
+    renderView();
+  };
   await loadTeachers();
 };
 
