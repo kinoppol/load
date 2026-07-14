@@ -138,6 +138,7 @@ const NAV = [
   { id: 'periods',     icon: '📅', label: 'งวดการเบิก',       roles: ['admin','director','curriculum','accounting'] },
   { id: 'attendance',  icon: '✅', label: 'บันทึกปฏิบัติงาน', roles: ['admin','curriculum','teacher'] },
   { id: 'makeup',      icon: '🔄', label: 'สอนชดเชย/แทน',    roles: ['admin','director','curriculum','teacher'] },
+  { id: 'teaching',    icon: '🗓️', label: 'ตารางสอน',         roles: ['admin','director','curriculum'] },
   { section: 'รายงาน' },
   { id: 'reports',     icon: '📈', label: 'รายงานสรุป',       roles: ['admin','director','curriculum','accounting'] },
   { section: 'ระบบ' },
@@ -169,7 +170,7 @@ function buildNav() {
 const pageTitles = {
   dashboard: 'ภาพรวมระบบ', claims: 'จัดการใบเบิก', rules: 'กำหนดเงื่อนไข',
   periods: 'งวดการเบิก', attendance: 'บันทึกปฏิบัติงาน', makeup: 'สอนชดเชย/แทน',
-  reports: 'รายงานสรุป', institution: 'ข้อมูลสถานศึกษา', users: 'จัดการผู้ใช้งาน', settings: 'การตั้งค่าระบบ',
+  reports: 'รายงานสรุป', institution: 'ข้อมูลสถานศึกษา', users: 'จัดการผู้ใช้งาน', settings: 'การตั้งค่าระบบ', teaching: 'ตารางสอน',
 };
 
 function navigate(page) {
@@ -1646,6 +1647,94 @@ pages.institution = async () => {
       if (r.success) { closeModal(); pages.institution(); }
     };
   };
+};
+
+/* ── TEACHING SCHEDULE ────────────────────────────── */
+pages.teaching = async () => {
+  const dayOrder = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','พฤหัส','ศุกร์','เสาร์','อาทิตย์'];
+  const dayRank = d => { const i = dayOrder.indexOf((d||'').trim()); return i < 0 ? 99 : i; };
+
+  const semR = await api('/api/schedules.php?list=semesters');
+  const semesters = semR.data?.semesters || [];
+
+  if (!semesters.length) {
+    $('page-content').innerHTML = `<div class="card card-body anim-fadeup text-muted" style="text-align:center;padding:50px">
+      ยังไม่มีข้อมูลตารางสอน — โหลดข้อมูลได้ที่ <b>การตั้งค่าระบบ → การเชื่อมต่อ RMS → โหลดตารางเรียน</b></div>`;
+    return;
+  }
+
+  let curSemes = semesters[0].semes;
+  let teachers = [];
+  let curTeacher = '';
+
+  $('page-content').innerHTML = `
+    <div class="anim-fadeup">
+      <div class="d-flex gap-10 mb-16 align-center" style="flex-wrap:wrap">
+        <span class="fw-600 fs-13 text-muted">ภาคเรียน:</span>
+        <select class="form-control" id="ts-semes" style="width:150px" onchange="tsSemes(this.value)">
+          ${semesters.map(s=>`<option value="${s.semes}">${s.semes} (${fmtN(s.n)})</option>`).join('')}
+        </select>
+        <span class="fw-600 fs-13 text-muted">ครูผู้สอน:</span>
+        <select class="form-control" id="ts-teacher" style="min-width:240px" onchange="tsTeacher(this.value)"></select>
+      </div>
+      <div id="ts-body"></div>
+    </div>`;
+
+  const loadTeachers = async () => {
+    const r = await api(`/api/schedules.php?list=teachers&semes=${encodeURIComponent(curSemes)}`);
+    teachers = r.data?.teachers || [];
+    const sel = $('ts-teacher');
+    sel.innerHTML = teachers.length
+      ? teachers.map(t=>`<option value="${t.teacher_id}">${t.teacher_name} · ${t.subject_count} วิชา / ${t.total_periods} คาบ</option>`).join('')
+      : `<option value="">— ไม่มีข้อมูลครู —</option>`;
+    curTeacher = teachers[0]?.teacher_id || '';
+    await loadSchedule();
+  };
+
+  const loadSchedule = async () => {
+    const body = $('ts-body');
+    if (!curTeacher) { body.innerHTML = `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบข้อมูล</div>`; return; }
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">⏳ กำลังโหลด...</div>`;
+    const r = await api(`/api/schedules.php?semes=${encodeURIComponent(curSemes)}&teacher_id=${encodeURIComponent(curTeacher)}`);
+    const rows = r.data?.rows || [];
+    const tName = teachers.find(t=>String(t.teacher_id)===String(curTeacher))?.teacher_name || '';
+    const totalPeriods = r.data?.total_periods || 0;
+
+    // จัดกลุ่มตามวัน
+    const byDay = {};
+    rows.forEach(x=>{ const d=(x.day_name||'ไม่ระบุ').trim(); (byDay[d]=byDay[d]||[]).push(x); });
+    const days = Object.keys(byDay).sort((a,b)=>dayRank(a)-dayRank(b));
+
+    body.innerHTML = `
+      <div class="grid-3 mb-18">
+        <div class="stat-card"><div class="stat-label">ครูผู้สอน 👨‍🏫</div><div class="stat-value" style="font-size:18px">${tName}</div></div>
+        <div class="stat-card"><div class="stat-label">จำนวนวิชา 📚</div><div class="stat-value">${fmtN(rows.length)} วิชา</div></div>
+        <div class="stat-card"><div class="stat-label">คาบรวม/สัปดาห์ ⏱️</div><div class="stat-value text-accent">${fmtN(totalPeriods)} คาบ</div></div>
+      </div>
+      ${days.length ? days.map(d=>`
+        <div class="card mb-14">
+          <div class="card-header"><span>📆 ${d}</span><span class="fs-11 text-muted">${byDay[d].length} วิชา</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr>
+              <th class="text-center">เวลา</th><th>วิชา</th><th>กลุ่ม</th>
+              <th class="text-center">คาบ</th><th class="text-center">ห้อง</th>
+            </tr></thead>
+            <tbody>
+              ${byDay[d].sort((a,b)=>(a.time_range||'').localeCompare(b.time_range||'')).map(x=>`<tr>
+                <td class="text-center fs-12 fw-600">${x.time_range||'-'}</td>
+                <td><div class="fw-600 fs-13">${x.subject_name||'-'}</div><div class="fs-11 text-muted">${x.subject_id||''}</div></td>
+                <td class="fs-12">${x.student_group_id||'-'}</td>
+                <td class="text-center fw-700 text-accent">${x.periods??'-'}</td>
+                <td class="text-center fs-12">${x.room||'-'}${x.building?`<div class="fs-11 text-muted">${x.building}</div>`:''}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table></div>
+        </div>`).join('') : `<div class="card card-body text-muted" style="text-align:center;padding:40px">ไม่พบตารางสอน</div>`}`;
+  };
+
+  window.tsSemes = async (v) => { curSemes = v; await loadTeachers(); };
+  window.tsTeacher = async (v) => { curTeacher = v; await loadSchedule(); };
+  await loadTeachers();
 };
 
 /* ── RMS sync loading animation (shared) ──────────── */

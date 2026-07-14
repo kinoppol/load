@@ -5,12 +5,59 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 Auth::requireApi();
-Auth::requireRole('admin', 'director');
 header('Content-Type: application/json; charset=utf-8');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+if ($method === 'GET') {
+    Auth::requireRole('admin', 'director', 'curriculum');
+    $list = $_GET['list'] ?? '';
+
+    // ภาคเรียนที่มีข้อมูลตารางสอน
+    if ($list === 'semesters') {
+        $rows = DB::fetchAll(
+            'SELECT semes, COUNT(*) AS n FROM class_schedules GROUP BY semes ORDER BY semes DESC'
+        );
+        json_ok(['semesters' => $rows]);
+    }
+
+    // รายชื่อครูในภาคเรียนที่เลือก พร้อมจำนวนวิชา/คาบรวม
+    if ($list === 'teachers') {
+        $semes = trim((string)($_GET['semes'] ?? ''));
+        if ($semes === '') json_err('ไม่ได้ระบุภาคเรียน');
+        $rows = DB::fetchAll(
+            'SELECT teacher_id, teacher_name,
+                    COUNT(*) AS subject_count,
+                    COALESCE(SUM(periods),0) AS total_periods
+             FROM class_schedules
+             WHERE semes=? AND teacher_name IS NOT NULL AND teacher_name<>""
+             GROUP BY teacher_id, teacher_name
+             ORDER BY teacher_name',
+            [$semes]
+        );
+        json_ok(['teachers' => $rows]);
+    }
+
+    // ตารางสอนของครูคนหนึ่งในภาคเรียนที่เลือก
+    $semes     = trim((string)($_GET['semes'] ?? ''));
+    $teacherId = trim((string)($_GET['teacher_id'] ?? ''));
+    if ($semes === '' || $teacherId === '') json_err('ไม่ได้ระบุภาคเรียนหรือครู');
+    $rows = DB::fetchAll(
+        'SELECT subject_id, subject_name, student_group_id, day_name, time_range,
+                periods, room, building
+         FROM class_schedules
+         WHERE semes=? AND teacher_id=?
+         ORDER BY day_name, time_range',
+        [$semes, $teacherId]
+    );
+    json_ok([
+        'rows'          => $rows,
+        'total_periods' => array_sum(array_map(fn($r) => (int)$r['periods'], $rows)),
+    ]);
+}
+
 if ($method === 'POST') {
+    Auth::requireRole('admin', 'director');
     $d      = get_input();
     $action = $d['action'] ?? '';
 
