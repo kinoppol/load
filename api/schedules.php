@@ -50,8 +50,43 @@ if ($method === 'GET') {
          ORDER BY day_name, time_range',
         [$semes, $teacherId]
     );
+
+    // map รหัสกลุ่ม -> ชื่อย่อ + จำนวนนักเรียน (นับจากตาราง students)
+    $codes = array_values(array_unique(array_filter(
+        array_map(fn($r) => (string)$r['student_group_id'], $rows),
+        fn($c) => $c !== '' && $c !== '00000000'
+    )));
+    $groupMap = [];
+    if ($codes) {
+        $ph = implode(',', array_fill(0, count($codes), '?'));
+        $srows = DB::fetchAll(
+            "SELECT group_code,
+                    COALESCE(MAX(NULLIF(group_abbr,'')), MAX(group_name)) AS abbr,
+                    COUNT(*) AS cnt
+             FROM students WHERE group_code IN ($ph) GROUP BY group_code",
+            $codes
+        );
+        foreach ($srows as $g) {
+            $groupMap[$g['group_code']] = ['abbr' => $g['abbr'], 'count' => (int)$g['cnt']];
+        }
+        // กลุ่มที่ยังไม่มีนักเรียนในระบบ → ดึงชื่อย่อจากตาราง student_groups
+        $missing = array_values(array_diff($codes, array_keys($groupMap)));
+        if ($missing) {
+            $ph2 = implode(',', array_fill(0, count($missing), '?'));
+            $grows = DB::fetchAll(
+                "SELECT group_code, COALESCE(MAX(NULLIF(group_abbr,'')), MAX(group_name)) AS abbr
+                 FROM student_groups WHERE group_code IN ($ph2) GROUP BY group_code",
+                $missing
+            );
+            foreach ($grows as $g) {
+                $groupMap[$g['group_code']] = ['abbr' => $g['abbr'], 'count' => 0];
+            }
+        }
+    }
+
     json_ok([
         'rows'          => $rows,
+        'groups'        => $groupMap,
         'total_periods' => array_sum(array_map(fn($r) => (int)$r['periods'], $rows)),
     ]);
 }

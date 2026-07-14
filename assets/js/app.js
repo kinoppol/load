@@ -1669,7 +1669,12 @@ pages.teaching = async () => {
   }
 
   let curSemes = semesters[0].semes;
-  let teachers = [], curTeacher = '', rows = [], view = 'grid';
+  let teachers = [], curTeacher = '', rows = [], groupInfo = {}, view = 'grid';
+  const groupLabel = (code) => {
+    const g = groupInfo[code];
+    if (!g) return code;
+    return (g.abbr || code) + (g.count ? ` (${g.count})` : '');
+  };
 
   $('page-content').innerHTML = `
     <div class="anim-fadeup">
@@ -1727,7 +1732,7 @@ pages.teaching = async () => {
           tds += `<td colspan="${cs}" class="ts-cell">${items.map(x=>`
             <div class="ts-code">${x.subject_id||''}</div>
             <div>${x.room||''}</div>
-            ${x.student_group_id&&x.student_group_id!=='00000000'?`<div class="fs-11 text-muted">${x.student_group_id}</div>`:''}
+            ${x.student_group_id&&x.student_group_id!=='00000000'?`<div class="fs-11 text-muted">${groupLabel(x.student_group_id)}</div>`:''}
           `).join('<hr class="ts-sep">')}</td>`;
         } else { tds += `<td></td>`; }
       }
@@ -1787,7 +1792,7 @@ pages.teaching = async () => {
               <td class="fs-12 fw-600">${s.id||'-'}</td>
               <td class="fs-12">${s.name||'-'}</td>
               <td class="text-center fw-700 text-accent">${s.periods}</td>
-              <td class="fs-11 text-muted">${[...s.groups].join(', ')||'-'}</td>
+              <td class="fs-11 text-muted">${[...s.groups].map(groupLabel).join(', ')||'-'}</td>
             </tr>`).join('')||`<tr><td colspan="4" class="text-center text-muted" style="padding:20px">ไม่มีข้อมูล</td></tr>`}</tbody>
           </table></div>
         </div>
@@ -1802,6 +1807,7 @@ pages.teaching = async () => {
     body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">⏳ กำลังโหลด...</div>`;
     const r = await api(`/api/schedules.php?semes=${encodeURIComponent(curSemes)}&teacher_id=${encodeURIComponent(curTeacher)}`);
     rows = r.data?.rows || [];
+    groupInfo = r.data?.groups || {};
     renderView();
   };
 
