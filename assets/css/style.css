@@ -166,8 +166,8 @@ label.form-label{display:block;font-size:12px;font-weight:600;color:var(--muted)
 .progress-bar{height:100%;border-radius:3px;transition:width .4s}
 
 /* ── Timetable grid ──────────────────────────────── */
-.ts-grid{border-collapse:collapse;width:100%;min-width:900px;table-layout:fixed}
-.ts-grid th,.ts-grid td{border:1px solid var(--border);padding:4px;text-align:center;vertical-align:middle;font-size:11px}
+.ts-grid{border-collapse:collapse;width:100%;min-width:900px;table-layout:fixed;border:2px solid var(--muted)}
+.ts-grid th,.ts-grid td{border:1px solid var(--muted);padding:4px;text-align:center;vertical-align:middle;font-size:11px}
 .ts-grid tbody td{height:62px}          /* ทุกช่องคาบสูงเท่ากันแม้ไม่มีข้อมูล */
 .ts-grid thead th{background:var(--tag);font-weight:700;white-space:nowrap;height:auto}
 .ts-grid .ts-day{background:var(--tag);font-weight:700;white-space:nowrap}
