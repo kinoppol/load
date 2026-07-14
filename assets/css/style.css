@@ -168,8 +168,9 @@ label.form-label{display:block;font-size:12px;font-weight:600;color:var(--muted)
 /* ── Timetable grid ──────────────────────────────── */
 .ts-grid{border-collapse:collapse;width:100%;min-width:900px;table-layout:fixed}
 .ts-grid th,.ts-grid td{border:1px solid var(--border);padding:4px;text-align:center;vertical-align:middle;font-size:11px}
-.ts-grid thead th{background:var(--tag);font-weight:700;white-space:nowrap}
-.ts-grid .ts-day{background:var(--tag);font-weight:700;width:92px;white-space:nowrap}
+.ts-grid tbody td{height:62px}          /* ทุกช่องคาบสูงเท่ากันแม้ไม่มีข้อมูล */
+.ts-grid thead th{background:var(--tag);font-weight:700;white-space:nowrap;height:auto}
+.ts-grid .ts-day{background:var(--tag);font-weight:700;white-space:nowrap}
 .ts-grid .ts-cell{background:#7B1F320d;padding:6px 4px;line-height:1.35}
 .ts-grid .ts-code{font-weight:700;color:#7B1F32}
 .ts-grid .ts-sep{border:0;border-top:1px dashed var(--border);margin:5px 0}

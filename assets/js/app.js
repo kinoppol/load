@@ -1673,7 +1673,7 @@ pages.teaching = async () => {
 
   $('page-content').innerHTML = `
     <div class="anim-fadeup">
-      <div class="d-flex gap-10 mb-16 align-center" style="flex-wrap:wrap">
+      <div class="d-flex gap-10 mb-16 align-center" style="flex-wrap:wrap" data-noprint>
         <span class="fw-600 fs-13 text-muted">ภาคเรียน:</span>
         <select class="form-control" id="ts-semes" style="width:150px" onchange="tsSemes(this.value)">
           ${semesters.map(s=>`<option value="${s.semes}">${s.semes} (${fmtN(s.n)})</option>`).join('')}
@@ -1685,6 +1685,7 @@ pages.teaching = async () => {
           <div class="tab active" id="ts-tab-grid" onclick="tsView('grid')">🗓️ ตารางรายสัปดาห์</div>
           <div class="tab" id="ts-tab-list" onclick="tsView('list')">📋 รายการตามวัน</div>
         </div>
+        <button class="btn btn-outline btn-sm" onclick="tsPrint()">🖨️ พิมพ์ / บันทึก PDF</button>
       </div>
       <div id="ts-body"></div>
     </div>`;
@@ -1733,7 +1734,8 @@ pages.teaching = async () => {
       return `<tr><td class="ts-day">${d}</td>${tds}</tr>`;
     }).join('');
 
-    return `<div class="tbl-wrap"><table class="ts-grid"><thead>${head}</thead><tbody>${bodyRows}</tbody></table></div>`;
+    const colgroup = `<colgroup><col style="width:92px">${Array.from({length:NPERIOD},()=>'<col>').join('')}</colgroup>`;
+    return `<div class="tbl-wrap"><table class="ts-grid">${colgroup}<thead>${head}</thead><tbody>${bodyRows}</tbody></table></div>`;
   };
 
   const renderList = () => {
@@ -1821,6 +1823,21 @@ pages.teaching = async () => {
     $('ts-tab-grid').classList.toggle('active', v==='grid');
     $('ts-tab-list').classList.toggle('active', v==='list');
     renderView();
+  };
+  window.tsPrint = () => {
+    // สลับหน้ากระดาษเป็นแนวนอนเฉพาะการพิมพ์ครั้งนี้ แล้วเอาออกหลังพิมพ์เสร็จ
+    const s = document.createElement('style');
+    s.textContent = `@media print{
+      @page{size:A4 landscape;margin:8mm}
+      .tbl-wrap{overflow:visible!important}
+      .ts-grid{min-width:0!important;width:100%!important;font-size:10px}
+      .ts-grid tbody td{height:56px}
+      #content{padding:0!important}
+    }`;
+    document.head.appendChild(s);
+    const cleanup = () => { s.remove(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
   };
   await loadTeachers();
 };
