@@ -1788,13 +1788,14 @@ pages.teaching = async () => {
           </div>
         </div>
         <div style="flex:2;min-width:280px">
-          <div class="tbl-wrap"><table>
+          <div class="tbl-wrap"><table style="table-layout:fixed;width:100%">
+            <colgroup><col style="width:110px"><col><col style="width:50px"><col style="width:220px"></colgroup>
             <thead><tr><th>รหัสวิชา</th><th>ชื่อรายวิชา</th><th class="text-center">คาบ</th><th>กลุ่ม</th></tr></thead>
             <tbody>${subjects.map(s=>`<tr>
               <td class="fs-12 fw-600">${subjCode(s.id)}</td>
-              <td class="fs-12">${s.name||'-'}</td>
+              <td class="fs-12" style="white-space:normal;word-break:break-word">${s.name||'-'}</td>
               <td class="text-center fw-700 text-accent">${s.periods}</td>
-              <td class="fs-11 text-muted">${[...s.groups].map(groupLabel).join(', ')||'-'}</td>
+              <td class="fs-11 text-muted" style="white-space:normal;word-break:break-word">${[...s.groups].map(groupLabel).join(', ')||'-'}</td>
             </tr>`).join('')||`<tr><td colspan="4" class="text-center text-muted" style="padding:20px">ไม่มีข้อมูล</td></tr>`}</tbody>
           </table></div>
         </div>
